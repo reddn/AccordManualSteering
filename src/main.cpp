@@ -81,7 +81,7 @@ void setup(){
 	// LKAStoEPS_Serial.begin(9600,8E1);
 	outputSerial.begin(1000000);
 	pinMode(analogRotaryInputPin,INPUT);
-	pinMode(forceLKASPin, INPUT);
+	pinMode(forceLKASPin, INPUT); 
 }
 
 
