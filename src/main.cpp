@@ -21,7 +21,8 @@ const uint8_t forceLKASPin = 0;
 const uint8_t analogRotaryInputPin = 20;
 uint16_t analogRotaryInputCenter = 450;
 
-#define LKAStoEPS_Serial Serial1
+#define LKAStoEPS_Serial Serial3
+
 #define EPStoLKAS_Serial Serial2
 #define outputSerial Serial3
 #define LKAStoEPS_MCU_Serial Serial4
@@ -42,8 +43,6 @@ const int forceRightPin = 11;
 
 int16_t forceLeftApplyTorque = -30;
 int16_t forceRightApplyTorque = 40;
-
-
 
 
 uint8_t counterbit = 0;
@@ -81,8 +80,8 @@ void createKLinMessage(int16_t applySteer){
 	LKAStoEPS_Serial.write(msg[1]);
 	LKAStoEPS_Serial.write(msg[2]);
 	LKAStoEPS_Serial.write(msg[3]);
+	outputSerial.print("CSM");
 }
-
 
 uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte){
 	uint16_t local = firstByte + secondByte + thirdByte ;
@@ -90,8 +89,6 @@ uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte){
 	local = 512 - local;
 	return (uint8_t)(local % 256);
 }
-
-
 
 struct incomingLKASMessage {
 	uint8_t totalCounter = 0;
@@ -139,7 +136,6 @@ void handleEPStoLKAS(){
 	}
 }
 
-
 void handleLKAStoEPS(){
 	if(LKAStoEPS_Serial.available()){
 		uint8_t mydata = LKAStoEPS_Serial.read();
@@ -152,6 +148,8 @@ void handleLKAStoEPS(){
 				LKAStoEPS_Serial.write(mydata);
 			}
 			
+		} else {
+			LKAStoEPS_Serial.write(mydata);
 		}
 	}
 }
@@ -160,12 +158,10 @@ void handleLKAStoEPS(){
 
 
 
-
-
 						// SETUP
 void setup(){
-	// EPStoLKAS_Serial.begin(9600,8E1);
-	// LKAStoEPS_Serial.begin(9600,8E1);
+	EPStoLKAS_Serial.begin(9600,8E1);
+	LKAStoEPS_Serial.begin(9600,8E1);
 	outputSerial.begin(OUTPUTSERIAL_BAUD);
 	pinMode(analogRotaryInputPin,INPUT);
 	pinMode(PB1_spoofLKASLeft, INPUT_PULLUP);

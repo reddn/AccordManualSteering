@@ -1,0 +1,13 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "PlatformIO",
+			"task": "Upload (teensy40)",
+			"problemMatcher": [
+				"$platformio"
+			],
+			"label": "PlatformIO: Upload (teensy40)"
+		}
+	]
+}
