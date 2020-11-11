@@ -15,8 +15,8 @@
 
 #define EPStoLKAS_Serial Serial2
 #define outputSerial Serial
-#define LKAStoEPS_MCU_Serial Serial4
-#define EPStoLKAS_MCU_Serial Serial5 
+// #define LKAStoEPS_MCU_Serial Serial4 // not sure why i defined these (MCU_Serial)... took them out to stop predictive text
+// #define EPStoLKAS_MCU_Serial Serial5 
 #define PB1_spoofLKASLeft 2
 #define PB2_spoofLKASRight 3
 #define PB3_spoofLKASStop 4

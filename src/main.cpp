@@ -51,7 +51,7 @@ uint8_t nextCounterBit = 0;
 
 
 
-// 			*****  FUNCTION DECLARATIONS  aka headers  *****
+// 																		*****  FUNCTION DECLARATIONS  aka headers  *****
 
 void printuint_t(uint8_t );
 void createKLinMessage(int16_t );
@@ -67,7 +67,7 @@ void handleLKAStoEPSNoSpoof(uint8_t);
 void handleEPStoLKASNoSpoof(uint8_t);
 
 
-// 				*****	FUNCTIONS ***** 
+// 																				*****	FUNCTIONS ***** 
 
 void createKLinMessage(int16_t applySteer){
 	uint8_t msg[4];
@@ -151,6 +151,21 @@ void  deconstructLKASMessage(uint8_t msg){ //
 void handleEPStoLKAS(){
 	if(EPStoLKAS_Serial.available()){
 		uint8_t mydata = EPStoLKAS_Serial.read();
+		uint8_t rcvdByte = mydata;
+		// the idea of using below is for multiple probabilities of use case..
+		switch(DIP1_spoofFullMCUDigitalRead) // 0 is ON (INPUT_PULLUP).  1 if OFF
+		{
+			case 0: // spoof MCU
+				handleEPStoLKASSpoofMCU(rcvdByte);
+				break;
+			case 1: // do not spoof MCU... relay or modify
+				handleEPStoLKASNoSpoof(rcvdByte);
+				break;
+		}
+
+
+
+/// keep full below until done *** left off here...
 		if(!DIP1_spoofFullMCUDigitalRead){
 			if((mydata >> 6) == 0){
 				EPStoLKASBufferCounter = 0;
@@ -192,51 +207,15 @@ void handleLKAStoEPS(){
 				break;
 			case 1: // spoof MCU
 				handleLKAStoMCUSpoofMCU(rcvdByte);
+				break;
 		}
 
 		if((rcvdByte >> 6) == 0){ //its the first byte
 			incomingMsg.totalCounter = 0;
 			
-			if(!DIP1_spoofFullMCUDigitalRead){
-				if(!PB1_spoofLKASLeftDigitalRead)  {
-					createKLinMessage(forceLeftApplyTorque);
-					forceLeftApplyTorque = random(-50,-25);
-				}
-				else if(!PB2_spoofLKASRightDigitalRead) {
-					createKLinMessage(forceRightApplyTorque);
-					forceRightApplyTorque = random(30,50);
-				}
-				else {
-					uint8_t localCounterBit = 0;
-					sendArrayToSerial(EPStoLKAS_Serial,&lkas_off_array[incomingMsg.counterBit][0], 4); //change to nextCounterBit
-				}
-			}
-			
-			if(!PB1_spoofLKASLeftDigitalRead && incomingMsg.lkasOn){
-				createKLinMessage(forceLeftApplyTorque);
-				LKASFrameSentByCreateLinMessage = 1;
-				forceLeftApplyTorque = random(-50,-25);
-			}else if(!PB2_spoofLKASRightDigitalRead && incomingMsg.lkasOn){
-				createKLinMessage(forceRightApplyTorque);
-				forceRightApplyTorque = random(30,50);
-				LKASFrameSentByCreateLinMessage =1 ;
-			} else {
-				LKAStoEPS_Serial.write(rcvdByte);
-				LKASFrameSentByCreateLinMessage = 0;
-				outputSerial.print("\nR-");
-				printuint_t(rcvdByte);
-				outputSerial.write(' ');
-			}
 			EPStoLKASBufferCounter = 0;
-		} else { //  if first byte of frame
-			if(!LKASFrameSentByCreateLinMessage) {
-				LKAStoEPS_Serial.write(rcvdByte);
-				printuint_t(rcvdByte);
-				outputSerial.write(' ');
-				// deconstructLKASMessage(mydata);
-			}
-		} // end else
-	}
+		}
+	} 
 } // handleLKAStoEPS()
 
 void handleDigitalReads(){
@@ -293,7 +272,21 @@ void sendArrayToSerial(HardwareSerial serial,uint8_t *array,uint8_t arraySize){
 }
 
 void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
-
+	if((rcvdByte >> 6) == 0){ //its the first byte
+		incomingMsg.totalCounter = 0;
+		if(!PB1_spoofLKASLeftDigitalRead)  {
+			createKLinMessage(forceLeftApplyTorque);
+			forceLeftApplyTorque = random(-50,-25);
+		}
+		else if(!PB2_spoofLKASRightDigitalRead) {
+			createKLinMessage(forceRightApplyTorque);
+			forceRightApplyTorque = random(30,50);
+		}
+		else {
+			sendArrayToSerial(EPStoLKAS_Serial,&lkas_off_array[incomingMsg.counterBit][0], 4); 
+		}
+	}
+	// no else... as all of the data is sent on when you receive the first byte....
 }
 
 void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
@@ -301,11 +294,15 @@ void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
 }
 
 void handleLKAStoEPSNoSpoof(uint8_t rcvdByte){
-
+	LKAStoEPS_Serial.write(rcvdByte);
+	if(incomingMsg.totalCounter == 0) outputSerial.print("\nR-");
+	printuint_t(rcvdByte);
+	outputSerial.write(' ');	
+	LKASFrameSentByCreateLinMessage = 0;
 }
 
 void handleEPStoLKASNoSpoof(uint8_t rcvdByte){
-
+	EPStoLKAS_Serial.write(rcvdByte);
 }
 
 // 			****** 				SETUP 					******
