@@ -8,6 +8,15 @@
 				"$platformio"
 			],
 			"label": "PlatformIO: Upload (teensy40)"
+		},
+		{
+			"type": "PlatformIO",
+			"task": "Build (teensy40)",
+			"problemMatcher": [
+				"$platformio"
+			],
+			"group": "build",
+			"label": "PlatformIO: Build (teensy40)"
 		}
 	]
 }
