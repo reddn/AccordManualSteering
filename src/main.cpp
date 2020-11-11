@@ -46,7 +46,7 @@ uint8_t EPStoLKASLastFrameSent[4];
 
 uint8_t nextCounterBit = 0;
  
-
+int8_t LkasOnIntroCountDown = 5; // sends 5 frames of LKAS on and 0 apply steer.. the stock LKAS does this. but I dont think its needed
 
 
 
@@ -81,6 +81,10 @@ void createKLinMessage(int16_t applySteer){
 	if (applySteer > 255) applySteer = 255; // 0xFF or B0 1111 1111
 	else if(applySteer < -256) applySteer = -256; // B? 1111 1111
 	
+	if(LkasOnIntroCountDown > 0){ // 
+		applySteer = 0;
+		LkasOnIntroCountDown--;
+	}
 	// push the 16 bit applySteer over 5 so you can get the 3MSB not inlucding the sign put it at the beginning of the bigSteer
 	uint8_t bigSteer = 0x00;
 	// extract the sign of apply steer (int16) and push it over to the 3rd offset, where it would be in the 2nd byte of the frame
@@ -123,9 +127,18 @@ uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte){
 
 void  deconstructLKASMessage(uint8_t msg){ //
 	//figure out which message byte your in.. check if first 2 bits are 0's
-	if(incomingMsg.totalCounter ==0){ // confirm you are receving the first bit
-
-		if((msg >> 6) != 0) return; 
+	if(((msg >> 6) == 0)){
+		incomingMsg.totalCounter = 0;
+	} else {
+		// outputSerial.write('\n');
+		// printuint_t(msg);
+		incomingMsg.totalCounter++;
+	}
+	if(incomingMsg.totalCounter > 3){ // ERROR!! this shouldnt happen
+		outputSerial.print("\nERROR:  incomingMsg.totalCounter is > 3 -- ");
+		outputSerial.print(incomingMsg.totalCounter,DEC);
+		outputSerial.println(" --   impossible ***");
+		incomingMsg.totalCounter = 0;
 	}
 	incomingMsg.data[incomingMsg.totalCounter] = msg;
 	switch (incomingMsg.totalCounter ){
@@ -145,13 +158,12 @@ void  deconstructLKASMessage(uint8_t msg){ //
 			incomingMsg.checksum = msg;
 			break;
 	}
-	incomingMsg.totalCounter++;
 } // deconstructLKASMessage(uint8_t msg)
 
 void handleEPStoLKAS(){
-	if(EPStoLKAS_Serial.available()){
-		uint8_t mydata = EPStoLKAS_Serial.read();
-		uint8_t rcvdByte = mydata;
+	if(EPStoLKAS_Serial.available())
+	{
+		uint8_t rcvdByte = EPStoLKAS_Serial.read();
 		// the idea of using below is for multiple probabilities of use case..
 		switch(DIP1_spoofFullMCUDigitalRead) // 0 is ON (INPUT_PULLUP).  1 if OFF
 		{
@@ -162,45 +174,18 @@ void handleEPStoLKAS(){
 				handleEPStoLKASNoSpoof(rcvdByte);
 				break;
 		}
-
-
-
-/// keep full below until done *** left off here...
-		if(!DIP1_spoofFullMCUDigitalRead){
-			if((mydata >> 6) == 0){
-				EPStoLKASBufferCounter = 0;
-				EPStoLKAS_Serial.write(eps_off_array[nextCounterBit][0]);
-				EPStoLKAS_Serial.write(eps_off_array[nextCounterBit][1]);
-				EPStoLKAS_Serial.write(eps_off_array[nextCounterBit][2]);
-				EPStoLKAS_Serial.write(eps_off_array[nextCounterBit][3]);
-				EPStoLKAS_Serial.write(eps_off_array[nextCounterBit][4]);
-			}
-		} else{
-			EPStoLKAS_Serial.write(mydata);
-		}
-		EPStoLKASBuffer[EPStoLKASBufferCounter++] = mydata;
-		if(EPStoLKASBufferCounter == 5){ // this indicates the end of the LKAStoEPS and EPStoLKAS exchange
-			nextCounterBit = !incomingMsg.counterBit;
-			outputSerial.print("  ^  ");
-			printuint_t(EPStoLKASBuffer[0]);
-			outputSerial.print("  ");
-			printuint_t(EPStoLKASBuffer[1]);
-			outputSerial.print("  ");
-			printuint_t(EPStoLKASBuffer[2]);
-			outputSerial.print("  ");
-			printuint_t(EPStoLKASBuffer[3]);
-			outputSerial.print("  ");
-			printuint_t(EPStoLKASBuffer[4]);
-			// outputSerial.write("\n");
-		}
 	}
 } // handleEPStoLKAS()
+
 
 void handleLKAStoEPS(){
 	if(LKAStoEPS_Serial.available()){
 		uint8_t rcvdByte = LKAStoEPS_Serial.read();
 		deconstructLKASMessage(rcvdByte);
 		uint8_t invertDIP1_spoofFullMCUDigitalRead = !DIP1_spoofFullMCUDigitalRead;
+		if((rcvdByte >> 6) == 0){ //its the first byte
+			EPStoLKASBufferCounter = 0;
+		}
 		switch(invertDIP1_spoofFullMCUDigitalRead){
 			case 0: // do not spoof MCU... relay or modify
 				handleLKAStoEPSNoSpoof(rcvdByte);
@@ -208,12 +193,6 @@ void handleLKAStoEPS(){
 			case 1: // spoof MCU
 				handleLKAStoMCUSpoofMCU(rcvdByte);
 				break;
-		}
-
-		if((rcvdByte >> 6) == 0){ //its the first byte
-			incomingMsg.totalCounter = 0;
-			
-			EPStoLKASBufferCounter = 0;
 		}
 	} 
 } // handleLKAStoEPS()
@@ -271,6 +250,44 @@ void sendArrayToSerial(HardwareSerial serial,uint8_t *array,uint8_t arraySize){
 	if(arraySize == 5) serial.write(*(array+4));
 }
 
+void sendArrayToLKAStoEPSSerial(uint8_t *array){
+	LKAStoEPS_Serial.write(*array);
+	LKAStoEPS_Serial.write(*(array+1));
+	LKAStoEPS_Serial.write(*(array+2));
+	LKAStoEPS_Serial.write(*(array+3));
+	// if(arraySize == 5) serial.write(*(array+4));
+}
+
+void sendArrayToEPStoLKASSerial(uint8_t *array){
+	EPStoLKAS_Serial.write(*array);
+	EPStoLKAS_Serial.write(*(array+1));
+	EPStoLKAS_Serial.write(*(array+2));
+	EPStoLKAS_Serial.write(*(array+3));
+	EPStoLKAS_Serial.write(*(array+4));
+	// if(arraySize == 5) serial.write(*(array+4));
+}
+
+
+
+void handleLKAStoEPSNoSpoof(uint8_t rcvdByte){
+	LKAStoEPS_Serial.write(rcvdByte);
+	
+	if(incomingMsg.totalCounter == 0) outputSerial.print("\nR-");
+	printuint_t(rcvdByte);
+	outputSerial.write(' ');	
+}
+
+void handleEPStoLKASNoSpoof(uint8_t rcvdByte){
+	EPStoLKAS_Serial.write(rcvdByte);
+	EPStoLKASBuffer[EPStoLKASBufferCounter++]  = rcvdByte;
+	if(EPStoLKASBufferCounter == 5){
+		outputSerial.print("  ^  ");
+		printArrayInBinary(&EPStoLKASBuffer[0],5);
+		EPStoLKASBufferCounter = 0;
+
+	}
+}
+
 void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
 	if((rcvdByte >> 6) == 0){ //its the first byte
 		incomingMsg.totalCounter = 0;
@@ -283,26 +300,30 @@ void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
 			forceRightApplyTorque = random(30,50);
 		}
 		else {
-			sendArrayToSerial(EPStoLKAS_Serial,&lkas_off_array[incomingMsg.counterBit][0], 4); 
+			// sendArrayToSerial(LKAStoEPS_Serial,&lkas_off_array[incomingMsg.counterBit][0], 4); 
+			sendArrayToLKAStoEPSSerial(&lkas_off_array[incomingMsg.counterBit][0]);
+			outputSerial.print("\nL-");
+			printArrayInBinary(&lkas_off_array[incomingMsg.counterBit][0],4);
+			LkasOnIntroCountDown = 5;
 		}
 	}
 	// no else... as all of the data is sent on when you receive the first byte....
 }
 
 void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
-	
-}
-
-void handleLKAStoEPSNoSpoof(uint8_t rcvdByte){
-	LKAStoEPS_Serial.write(rcvdByte);
-	if(incomingMsg.totalCounter == 0) outputSerial.print("\nR-");
-	printuint_t(rcvdByte);
-	outputSerial.write(' ');	
-	LKASFrameSentByCreateLinMessage = 0;
-}
-
-void handleEPStoLKASNoSpoof(uint8_t rcvdByte){
-	EPStoLKAS_Serial.write(rcvdByte);
+	if( (rcvdByte >> 6 )  == 0 ){
+		// sendArrayToSerial(EPStoLKAS_Serial , &eps_off_array[incomingMsg.counterBit][0], 5);
+		sendArrayToEPStoLKASSerial(&eps_off_array[incomingMsg.counterBit][0]);
+		EPStoLKASBufferCounter = 0;
+		// printArrayInBinary(&eps_off_array[incomingMsg.counterBit][0],5);
+	} else {
+		EPStoLKASBufferCounter++;
+		if(EPStoLKASBufferCounter == 5){
+			EPStoLKASBufferCounter = 0;
+			outputSerial.print("  ^  ");
+			printArrayInBinary(&eps_off_array[incomingMsg.counterBit][0],5);
+		}
+	}
 }
 
 // 			****** 				SETUP 					******
