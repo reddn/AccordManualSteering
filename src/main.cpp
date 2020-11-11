@@ -1,8 +1,6 @@
 #include <Arduino.h>
-// #include <struct.cpp>
 #include <define.cpp>
 #include <globalvars.cpp>
-
 #include <struct.cpp>
 
 
@@ -29,12 +27,6 @@ uint8_t PB2_spoofLKASRightDigitalRead = 1;
 
 uint32_t lastDigitalReadTime = 0;
 
-
-//if MCU LKAS is on, force the left torque to the forceLeftApplyTorque 
-const int forceLeftPin = 10;
-//if MCU LKAS is on, force the left torque to the forceRightApplyTorque 
-const int forceRightPin = 11;
-
 int16_t forceLeftApplyTorque = -30;
 int16_t forceRightApplyTorque = 40;
 
@@ -59,17 +51,20 @@ uint8_t nextCounterBit = 0;
 
 
 
-// 			*****  FUNCTION DECLARATIONS *****
+// 			*****  FUNCTION DECLARATIONS  aka headers  *****
 
-void printuint_t(uint8_t var);
-void createKLinMessage(int16_t applySteer);
-uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte);
-void  deconstructLKASMessage(uint8_t msg);
+void printuint_t(uint8_t );
+void createKLinMessage(int16_t );
+uint8_t chksm(uint8_t , uint8_t , uint8_t );
+void  deconstructLKASMessage(uint8_t );
 void handleEPStoLKAS();
 void handleDigitalReads();
-void sendArrayToSerial(HardwareSerial serial,uint8_t *array,uint8_t arraySize);
-void handleMCUtoLKASSpoofMCU(uint8_t rcvdByte);
-void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte);
+void sendArrayToSerial(HardwareSerial ,uint8_t* ,uint8_t);
+
+void handleLKAStoMCUSpoofMCU(uint8_t);
+void handleEPStoLKASSpoofMCU(uint8_t);
+void handleLKAStoEPSNoSpoof(uint8_t);
+void handleEPStoLKASNoSpoof(uint8_t);
 
 
 // 				*****	FUNCTIONS ***** 
@@ -193,7 +188,7 @@ void handleLKAStoEPS(){
 		uint8_t invertDIP1_spoofFullMCUDigitalRead = !DIP1_spoofFullMCUDigitalRead;
 		switch(invertDIP1_spoofFullMCUDigitalRead){
 			case 0: // do not spoof MCU... relay or modify
-				handleMCUtoLKASSpoofMCU(rcvdByte);
+				handleLKAStoEPSNoSpoof(rcvdByte);
 				break;
 			case 1: // spoof MCU
 				handleLKAStoMCUSpoofMCU(rcvdByte);
@@ -301,8 +296,16 @@ void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
 
 }
 
-void handleMCUtoLKASSpoofMCU(uint8_t rcvdByte){
+void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
 	
+}
+
+void handleLKAStoEPSNoSpoof(uint8_t rcvdByte){
+
+}
+
+void handleEPStoLKASNoSpoof(uint8_t rcvdByte){
+
 }
 
 // 			****** 				SETUP 					******
