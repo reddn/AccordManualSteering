@@ -1,0 +1,5 @@
+hitting the brake while continuing to send LKAS torque commands to the EPS will cause the EPS to error (no error is displayed) and will not apply any torque until you restart the car
+
+the dash errors of will stay on... this means the MCU knows something is wrong
+
+TODO: check if there is a limit on applying torque to a certain angle of the steering wheel

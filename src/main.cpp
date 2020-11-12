@@ -58,7 +58,7 @@ void createKLinMessage(int16_t );
 uint8_t chksm(uint8_t , uint8_t , uint8_t );
 void  deconstructLKASMessage(uint8_t );
 void handleEPStoLKAS();
-void handleDigitalReads();
+void handleInputReads();
 void sendArrayToSerial(HardwareSerial ,uint8_t* ,uint8_t);
 
 void handleLKAStoMCUSpoofMCU(uint8_t);
@@ -88,7 +88,8 @@ void createKLinMessage(int16_t applySteer){
 	// push the 16 bit applySteer over 5 so you can get the 3MSB not inlucding the sign put it at the beginning of the bigSteer
 	uint8_t bigSteer = 0x00;
 	// extract the sign of apply steer (int16) and push it over to the 3rd offset, where it would be in the 2nd byte of the frame
-	uint8_t bigSteerSign = ( (uint8_t) applySteer >> 12 ) & 0x8 ; //0x8 = 0000 1000
+	uint8_t bigSteerSign = 0; // >> old version.. doesn't work( (uint8_t) (applySteer >> 12 ) ) & 0x8 ; //0x8 = 0000 1000
+	if(applySteer < 0 ) bigSteerSign = B00001000; 
 	//get the bigsteer (3 MSB, exlcuding the sign bit) and add(OR) the sign
 	bigSteer =  ( (applySteer >> 5) & 0x7 ) | bigSteerSign;  // 0x7 = 0000 0111  
 	msg[0] = (incomingMsg.counterBit << 5) |  bigSteer;
@@ -110,11 +111,11 @@ void createKLinMessage(int16_t applySteer){
 	outputSerial.print("C-");
 
 	printuint_t(msg[0]);
-	outputSerial.write(' ');
+	outputSerial.print("  ");
 	printuint_t(msg[1]);
-	outputSerial.write(' ');
+	outputSerial.print("  ");
 	printuint_t(msg[2]);
-	outputSerial.write(' ');
+	outputSerial.print("  ");
 	printuint_t(msg[3]);
 }
 
@@ -197,7 +198,7 @@ void handleLKAStoEPS(){
 	} 
 } // handleLKAStoEPS()
 
-void handleDigitalReads(){
+void handleInputReads(){
 	if( ( millis() - lastDigitalReadTime ) > TIME_BETWEEN_DIGITIAL_READS){
 		PB1_spoofLKASLeftDigitalRead = digitalRead(PB1_spoofLKASLeft);
 		PB2_spoofLKASRightDigitalRead = digitalRead(PB2_spoofLKASRight);
@@ -293,11 +294,11 @@ void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
 		incomingMsg.totalCounter = 0;
 		if(!PB1_spoofLKASLeftDigitalRead)  {
 			createKLinMessage(forceLeftApplyTorque);
-			forceLeftApplyTorque = random(-50,-25);
+			forceLeftApplyTorque = random(-150,-125);
 		}
 		else if(!PB2_spoofLKASRightDigitalRead) {
 			createKLinMessage(forceRightApplyTorque);
-			forceRightApplyTorque = random(30,50);
+			forceRightApplyTorque = random(130,150);
 		}
 		else {
 			// sendArrayToSerial(LKAStoEPS_Serial,&lkas_off_array[incomingMsg.counterBit][0], 4); 
@@ -343,7 +344,7 @@ void setup(){
 void loop(){
 	handleEPStoLKAS();
 	handleLKAStoEPS();
-	handleDigitalReads();
+	handleInputReads();
 	if((millis() - readLEDblinkLastChange) > 2000){
 		// outputSerial.println("LED change");
 		digitalWrite(LED_BUILTIN,!digitalRead(LED_BUILTIN));
