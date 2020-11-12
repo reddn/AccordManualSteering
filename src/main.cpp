@@ -2,6 +2,7 @@
 #include <define.cpp>
 #include <globalvars.cpp>
 #include <struct.cpp>
+#include <FlexCAN_T4.h>
 
 
 // *****  Global Variables *****
@@ -48,7 +49,7 @@ uint8_t nextCounterBit = 0;
  
 int8_t LkasOnIntroCountDown = 5; // sends 5 frames of LKAS on and 0 apply steer.. the stock LKAS does this. but I dont think its needed
 
-
+FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> FCAN;
 
 
 // 																		*****  FUNCTION DECLARATIONS  aka headers  *****
@@ -65,6 +66,10 @@ void handleLKAStoMCUSpoofMCU(uint8_t);
 void handleEPStoLKASSpoofMCU(uint8_t);
 void handleLKAStoEPSNoSpoof(uint8_t);
 void handleEPStoLKASNoSpoof(uint8_t);
+
+void sendEPStoLKASToCAN(uint8_t*);
+void sendLKAStoEPSFromCAN(uint8_t*);// might not use this one
+void handleLKASFromCan();
 
 
 // 																				*****	FUNCTIONS ***** 
@@ -325,6 +330,58 @@ void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
 			printArrayInBinary(&eps_off_array[incomingMsg.counterBit][0],5);
 		}
 	}
+}
+// message is actually 5, but im going to break out the steer values
+void sendEPStoLKASToCAN(uint8_t *EPSData){
+	CAN_message_t msg;
+    msg.id = EPStoLKASCanMsgId;
+	msg.len = 7;
+	for(char a = 0; a < 5; a++){
+		msg.buf[a] = *( EPSData + a );
+	}
+	msg.buf[5] = *EPSData & B00001111; // big steer
+	msg.buf[6] = *(EPSData +1) << 3; // small steer
+	FCAN.write(msg); 
+}
+
+void handleLKASFromCan(const CAN_message_t &msg){
+	// pull apply steer value
+	
+	// CAN message 
+	// Byte 1- B B B B S S S S
+	// Byte 2- S 0 0 E C C C C
+	// Byte 3- CHECKSUM
+	// B = BIg steer
+	// S = Small steer (used in createlinmsg)
+	// E = Enable LKAS (if zero. send lkas_off_msg)
+	// C = Counter. 4 bit 0-15
+	// CHECKSUM = guess
+	uint8_t lclBigSteer = msg.buf[0] >> 4;
+	uint8_t lclSmallSteer = (msg.buf[0] & B00001111 ) << 1;
+	lclSmallSteer = lclSmallSteer | (msg.buf[1] >> 7);
+
+	// verify counter is working
+	
+	// verify checksum
+
+	// set big/small steer in varible and that LKAS is on
+	// so when its time to send a LKAS message, it just reads the data, make the checksum and send it
+
+}
+
+
+void canSetup(){
+	FCAN.begin();
+	FCAN.setBaudRate(500000);
+	FCAN.setMaxMB(16);
+	FCAN.enableFIFO();
+	FCAN.enableFIFOInterrupt();
+	FCAN.onReceive(handleLKASFromCan);
+	FCAN.mailboxStatus();
+
+	FCAN.setFIFOFilter(REJECT_ALL);
+	FCAN.setMBFilter(REJECT_ALL);
+	FCAN.setFIFOFilter(0, 0x200, STD); // Set filter0 to allow STANDARD CAN ID 0x123 to be collected by FIFO. 
 }
 
 // 			****** 				SETUP 					******

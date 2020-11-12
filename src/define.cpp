@@ -36,3 +36,6 @@
 
 #define BLUE_LED 28 //Used for signifying "manipulated" data
 #define TIME_BETWEEN_DIGITIAL_READS 250
+
+#define EPStoLKASCanMsgId 0x201
+#define LKAStoEPSCanMsgId 0x200
