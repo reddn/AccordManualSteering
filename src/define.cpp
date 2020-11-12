@@ -30,7 +30,8 @@
 #define DIP6 11
 #define DIP7 12
 
-
+#define sendEPStoLKASRxToCan false
+#define sendLKAStoEPSRxToCan false
 
 #define OUTPUTSERIAL_BAUD 921600
 
@@ -39,3 +40,6 @@
 
 #define EPStoLKASCanMsgId 0x201
 #define LKAStoEPSCanMsgId 0x200
+
+#define LKAStoEPSLinDataRxMsgId 0x202 //this is the data originated by the MCU that is suppose to go to the EPS.  this is only for testing and to further figure out what the EPStoLKAS data stream is (bytes 3 and 4 of the frame)
+#define EPStoLKASLinDataRxMsgId 0x203 // see above

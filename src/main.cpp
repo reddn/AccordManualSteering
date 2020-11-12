@@ -51,6 +51,7 @@ int8_t LkasOnIntroCountDown = 5; // sends 5 frames of LKAS on and 0 apply steer.
 
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> FCAN;
 
+CAN_message_t canMsg;
 
 // 																		*****  FUNCTION DECLARATIONS  aka headers  *****
 
@@ -281,6 +282,17 @@ void handleLKAStoEPSNoSpoof(uint8_t rcvdByte){
 	if(incomingMsg.totalCounter == 0) outputSerial.print("\nR-");
 	printuint_t(rcvdByte);
 	outputSerial.write(' ');	
+	if(incomingMsg.totalCounter == 3){
+		if(sendLKAStoEPSRxToCan){
+			canMsg.id = LKAStoEPSLinDataRxMsgId;
+			canMsg.len = 4;
+			for(char zz =0 ; zz < 4; zz++){
+				canMsg.buf[zz] = incomingMsg.data[zz];
+			}
+			FCAN.write(canMsg);
+		}
+	}
+	
 }
 
 void handleEPStoLKASNoSpoof(uint8_t rcvdByte){
@@ -290,7 +302,14 @@ void handleEPStoLKASNoSpoof(uint8_t rcvdByte){
 		outputSerial.print("  ^  ");
 		printArrayInBinary(&EPStoLKASBuffer[0],5);
 		EPStoLKASBufferCounter = 0;
-
+		if(sendEPStoLKASRxToCan){
+			canMsg.id = EPStoLKASLinDataRxMsgId;
+			canMsg.len = 5;
+			for(char zz =0 ; zz < 5; zz++){
+				canMsg.buf[zz] = EPStoLKASBuffer[zz];
+			}
+			FCAN.write(canMsg);
+		}
 	}
 }
 
@@ -311,6 +330,17 @@ void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
 			outputSerial.print("\nL-");
 			printArrayInBinary(&lkas_off_array[incomingMsg.counterBit][0],4);
 			LkasOnIntroCountDown = 5;
+		}
+	}else{ // its not the first byte
+		if(incomingMsg.totalCounter == 3){ //its the last byte of the frame
+			if(sendLKAStoEPSRxToCan){
+				canMsg.id = LKAStoEPSLinDataRxMsgId;
+				canMsg.len = 4;
+				for(char zz = 0; zz < 4; zz++){
+					canMsg.buf[zz] = incomingMsg.data[zz];
+				}
+				FCAN.write(canMsg);
+			}
 		}
 	}
 	// no else... as all of the data is sent on when you receive the first byte....
