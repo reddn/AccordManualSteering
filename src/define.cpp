@@ -20,7 +20,10 @@
 #define PB1_spoofLKASLeft 2
 #define PB2_spoofLKASRight 3
 #define PB3_spoofLKASStop 4
+#define PB4_spoofLKASSteerWithPOTEnablePin 5
 #define DIP1_spoofFullMCU 6
+
+#define A1_applySteeringPotPin 26
 
 #define DIP1 6
 #define DIP2 32
@@ -39,7 +42,9 @@
 #define TIME_BETWEEN_DIGITIAL_READS 250
 
 #define EPStoLKASCanMsgId 0x201
-#define LKAStoEPSCanMsgId 0x200
+#define LKAStoEPSCanMsgId 0x1AB //this is Steer torque request DEC 427
+
+#define SteerTorqueSensorCanMsgId 0x199 // TODO:  is in DEC 399
 
 #define LKAStoEPSLinDataRxMsgId 0x202 //this is the data originated by the MCU that is suppose to go to the EPS.  this is only for testing and to further figure out what the EPStoLKAS data stream is (bytes 3 and 4 of the frame)
 #define EPStoLKASLinDataRxMsgId 0x203 // see above

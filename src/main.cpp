@@ -53,6 +53,8 @@ FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> FCAN;
 
 CAN_message_t canMsg;
 
+int A1_applySteeringPot = 0;
+
 // 																		*****  FUNCTION DECLARATIONS  aka headers  *****
 
 void printuint_t(uint8_t );
@@ -71,6 +73,7 @@ void handleEPStoLKASNoSpoof(uint8_t);
 void sendEPStoLKASToCAN(uint8_t*);
 void sendLKAStoEPSFromCAN(uint8_t*);// might not use this one
 void handleLKASFromCan();
+void createKLinMessageWBigSteerAndLittleSteer(uint8_t,uint8_t);
 
 
 // 																				*****	FUNCTIONS ***** 
@@ -217,6 +220,7 @@ void handleInputReads(){
 			digitalWrite(BLUE_LED,HIGH);
 		} else digitalWrite(BLUE_LED,LOW);
 		DIP1_spoofFullMCUDigitalRead = digitalRead(DIP1_spoofFullMCU);
+		A1_applySteeringPot = analogRead(A1_applySteeringPotPin);
 	} // end if true
 }
 
@@ -286,7 +290,7 @@ void handleLKAStoEPSNoSpoof(uint8_t rcvdByte){
 		if(sendLKAStoEPSRxToCan){
 			canMsg.id = LKAStoEPSLinDataRxMsgId;
 			canMsg.len = 4;
-			for(char zz =0 ; zz < 4; zz++){
+			for(uint8_t zz =0 ; zz < 4; zz++){
 				canMsg.buf[zz] = incomingMsg.data[zz];
 			}
 			FCAN.write(canMsg);
@@ -305,7 +309,7 @@ void handleEPStoLKASNoSpoof(uint8_t rcvdByte){
 		if(sendEPStoLKASRxToCan){
 			canMsg.id = EPStoLKASLinDataRxMsgId;
 			canMsg.len = 5;
-			for(char zz =0 ; zz < 5; zz++){
+			for(unsigned char zz =0 ; zz < 5; zz++){
 				canMsg.buf[zz] = EPStoLKASBuffer[zz];
 			}
 			FCAN.write(canMsg);
@@ -336,7 +340,7 @@ void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
 			if(sendLKAStoEPSRxToCan){
 				canMsg.id = LKAStoEPSLinDataRxMsgId;
 				canMsg.len = 4;
-				for(char zz = 0; zz < 4; zz++){
+				for(uint8_t zz = 0; zz < 4; zz++){
 					canMsg.buf[zz] = incomingMsg.data[zz];
 				}
 				FCAN.write(canMsg);
@@ -362,16 +366,30 @@ void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
 	}
 }
 // message is actually 5, but im going to break out the steer values
-void sendEPStoLKASToCAN(uint8_t *EPSData){
+void sendEPStoLKASToCAN(uint8_t *EPSData){ // Sends the 5 byte frame to CAN for tracking in cabana
+	// TODO: send a can message for Steer torque so OP can see it
+
 	CAN_message_t msg;
     msg.id = EPStoLKASCanMsgId;
-	msg.len = 7;
-	for(char a = 0; a < 5; a++){
+	msg.len = 5;
+	for(unsigned char a = 0; a < 5; a++){
 		msg.buf[a] = *( EPSData + a );
 	}
-	msg.buf[5] = *EPSData & B00001111; // big steer
-	msg.buf[6] = *(EPSData +1) << 3; // small steer
 	FCAN.write(msg); 
+	//CAN message for steer torque (by driver)
+	//Byte 1:  B B B B S S S S
+	//byte 2:  S 0 C C H H H H
+	// B = Big steer input   S = Small steer input 
+	// C = Counter (2 bit)   H = 4 bit checksum
+	msg.len = 2;
+	msg.buf[0] = 0x00;
+	msg.buf[0] = (*EPSData << 4); // big steer
+	uint8_t EPS2ndByte = *(EPSData +1);
+	msg.buf[0] = ( (EPS2ndByte >> 1 ) & B00001111 )  | msg.buf[0];
+	msg.buf[1] = *(EPSData + 1) << 3; // small steer
+	msg.id = SteerTorqueSensorCanMsgId;
+	FCAN.write(msg);
+
 }
 
 void handleLKASFromCan(const CAN_message_t &msg){
@@ -387,16 +405,20 @@ void handleLKASFromCan(const CAN_message_t &msg){
 	// C = Counter. 4 bit 0-15
 	// CHECKSUM = guess
 	uint8_t lclBigSteer = msg.buf[0] >> 4;
-	uint8_t lclSmallSteer = (msg.buf[0] & B00001111 ) << 1;
-	lclSmallSteer = lclSmallSteer | (msg.buf[1] >> 7);
+	uint8_t lclLittleSteer = (msg.buf[0] & B00001111 ) << 1;
+	lclLittleSteer = lclLittleSteer | (msg.buf[1] >> 7);
 
 	// verify counter is working
-	
+	bool counterVerified = true;
 	// verify checksum
-
+	bool checksumVerified = true;
 	// set big/small steer in varible and that LKAS is on
 	// so when its time to send a LKAS message, it just reads the data, make the checksum and send it
-
+	if(counterVerified && checksumVerified){
+		createKLinMessageWBigSteerAndLittleSteer(lclBigSteer,lclLittleSteer);
+	} else{
+		// TODO: send/set/notify something to show there was an error... 
+	}
 }
 
 
@@ -411,7 +433,7 @@ void canSetup(){
 
 	FCAN.setFIFOFilter(REJECT_ALL);
 	FCAN.setMBFilter(REJECT_ALL);
-	FCAN.setFIFOFilter(0, 0x200, STD); // Set filter0 to allow STANDARD CAN ID 0x123 to be collected by FIFO. 
+	FCAN.setFIFOFilter(0, LKAStoEPSCanMsgId, STD); // Set filter0 to allow STANDARD CAN ID 0x123 to be collected by FIFO. 
 }
 
 // 			****** 				SETUP 					******
@@ -426,6 +448,7 @@ void setup(){
 	pinMode(DIP1_spoofFullMCU, INPUT_PULLUP);
 	pinMode(BLUE_LED,OUTPUT);
 	pinMode(LED_BUILTIN, OUTPUT);
+	canSetup();
 }
 
 void loop(){
