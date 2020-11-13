@@ -25,11 +25,13 @@ uint16_t analogRotaryInputCenter = 450;
 
 uint8_t PB1_spoofLKASLeftDigitalRead = 1;
 uint8_t PB2_spoofLKASRightDigitalRead = 1;
+uint8_t PB4_spoofLKASSteerWithPOTEnableDigitalRead = 1;
 
 uint32_t lastDigitalReadTime = 0;
 
 int16_t forceLeftApplyTorque = -30;
 int16_t forceRightApplyTorque = 40;
+int16_t forceApplyTorqueWithPOT = 0;
 
 uint8_t DIP1_spoofFullMCUDigitalRead = 0;
 
@@ -78,6 +80,8 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t,uint8_t);
 
 // 																				*****	FUNCTIONS ***** 
 
+
+
 void createKLinMessage(int16_t applySteer){
 	uint8_t msg[4];
 	msg[0] = 0;
@@ -119,6 +123,7 @@ void createKLinMessage(int16_t applySteer){
 	outputSerial.write('\n');
 	outputSerial.print("C-");
 
+	
 	printuint_t(msg[0]);
 	outputSerial.print("  ");
 	printuint_t(msg[1]);
@@ -126,6 +131,10 @@ void createKLinMessage(int16_t applySteer){
 	printuint_t(msg[2]);
 	outputSerial.print("  ");
 	printuint_t(msg[3]);
+}
+
+void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSteer){
+
 }
 
 uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte){
@@ -211,16 +220,13 @@ void handleInputReads(){
 	if( ( millis() - lastDigitalReadTime ) > TIME_BETWEEN_DIGITIAL_READS){
 		PB1_spoofLKASLeftDigitalRead = digitalRead(PB1_spoofLKASLeft);
 		PB2_spoofLKASRightDigitalRead = digitalRead(PB2_spoofLKASRight);
-		// outputSerial.print("reading Digital ");
-		// outputSerial.print(PB1_spoofLKASLeftDigitalRead,DEC);
-		// outputSerial.print("  ");
-		// outputSerial.print(PB2_spoofLKASRightDigitalRead,DEC);
-		// outputSerial.print(" \n");
+		PB4_spoofLKASSteerWithPOTEnableDigitalRead = digitalRead(PB4_spoofLKASSteerWithPOTEnablePin);
 		if((!PB1_spoofLKASLeftDigitalRead) || (!PB2_spoofLKASRightDigitalRead)){
 			digitalWrite(BLUE_LED,HIGH);
 		} else digitalWrite(BLUE_LED,LOW);
 		DIP1_spoofFullMCUDigitalRead = digitalRead(DIP1_spoofFullMCU);
 		A1_applySteeringPot = analogRead(A1_applySteeringPotPin);
+		forceApplyTorqueWithPOT = (A1_applySteeringPot - 478) / 1.8;
 	} // end if true
 }
 
@@ -327,8 +333,9 @@ void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
 		else if(!PB2_spoofLKASRightDigitalRead) {
 			createKLinMessage(forceRightApplyTorque);
 			forceRightApplyTorque = random(130,150);
-		}
-		else {
+		} else if(!PB4_spoofLKASSteerWithPOTEnablePin){
+			createKLinMessage(forceApplyTorqueWithPOT);
+		} else {
 			// sendArrayToSerial(LKAStoEPS_Serial,&lkas_off_array[incomingMsg.counterBit][0], 4); 
 			sendArrayToLKAStoEPSSerial(&lkas_off_array[incomingMsg.counterBit][0]);
 			outputSerial.print("\nL-");
@@ -343,7 +350,7 @@ void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
 				for(uint8_t zz = 0; zz < 4; zz++){
 					canMsg.buf[zz] = incomingMsg.data[zz];
 				}
-				FCAN.write(canMsg);
+				//FCAN.write(canMsg); // ****
 			}
 		}
 	}
@@ -397,7 +404,7 @@ void handleLKASFromCan(const CAN_message_t &msg){
 	
 	// CAN message 
 	// Byte 1- B B B B S S S S
-	// Byte 2- S 0 0 E C C C C
+	// Byte 2- S E C C H H H H
 	// Byte 3- CHECKSUM
 	// B = BIg steer
 	// S = Small steer (used in createlinmsg)
