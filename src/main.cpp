@@ -60,6 +60,8 @@ int A1_applySteeringPot = 0;
 // 																		*****  FUNCTION DECLARATIONS  aka headers  *****
 
 void printuint_t(uint8_t );
+void printArrayInBinary(uint8_t*, uint8_t);
+
 void createKLinMessage(int16_t );
 uint8_t chksm(uint8_t , uint8_t , uint8_t );
 void  deconstructLKASMessage(uint8_t );
@@ -120,21 +122,30 @@ void createKLinMessage(int16_t applySteer){
 	LKAStoEPS_Serial.write(msg[1]);
 	LKAStoEPS_Serial.write(msg[2]);
 	LKAStoEPS_Serial.write(msg[3]);
-	outputSerial.write('\n');
-	outputSerial.print("C-");
+	outputSerial.print("\nC-");
 
-	
-	printuint_t(msg[0]);
-	outputSerial.print("  ");
-	printuint_t(msg[1]);
-	outputSerial.print("  ");
-	printuint_t(msg[2]);
-	outputSerial.print("  ");
-	printuint_t(msg[3]);
+	printArrayInBinary(&msg[0],4);
 }
 
 void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSteer){
+	uint8_t msg[4];
+	msg[0] = (incomingMsg.counterBit << 5) |  bigSteer;
+	
+	LKAStoEPS_Serial.write(msg[0]);
+	
+	//get the little steer in the 2nd byte. its the last 5 bits of applysteer. also add in the 0xA0 = 1010 0000
+	msg[1] = littleSteer | 0xA0;  // 1010 0000
+	//								   ^ lkas on
+	msg[2] = 0x80; // this is static 0x80 = 1000 0000
+	
+	msg[3] = chksm(msg[0], msg[1], msg[2]);
 
+	LKAStoEPS_Serial.write(msg[1]);
+	LKAStoEPS_Serial.write(msg[2]);
+	LKAStoEPS_Serial.write(msg[3]);
+
+	outputSerial.print("\nC-");
+	printArrayInBinary(&msg[0],4);
 }
 
 uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte){
@@ -286,6 +297,8 @@ void sendArrayToEPStoLKASSerial(uint8_t *array){
 
 
 
+		// 		
+
 void handleLKAStoEPSNoSpoof(uint8_t rcvdByte){
 	LKAStoEPS_Serial.write(rcvdByte);
 	
@@ -383,7 +396,7 @@ void sendEPStoLKASToCAN(uint8_t *EPSData){ // Sends the 5 byte frame to CAN for 
 		msg.buf[a] = *( EPSData + a );
 	}
 	FCAN.write(msg); 
-	//CAN message for steer torque (by driver)
+	//CAN message for input steer torque (by driver)
 	//Byte 1:  B B B B S S S S
 	//byte 2:  S 0 C C H H H H
 	// B = Big steer input   S = Small steer input 
@@ -396,7 +409,6 @@ void sendEPStoLKASToCAN(uint8_t *EPSData){ // Sends the 5 byte frame to CAN for 
 	msg.buf[1] = *(EPSData + 1) << 3; // small steer
 	msg.id = SteerTorqueSensorCanMsgId;
 	FCAN.write(msg);
-
 }
 
 void handleLKASFromCan(const CAN_message_t &msg){
