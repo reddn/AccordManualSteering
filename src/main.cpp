@@ -19,8 +19,7 @@ uint8_t eps_off_array[][5] = {
 //0x00 = 00000000  0x80= ‭10000000‬0 0xc0=‭11000000‬  0xc0=‭11000000‬
 int16_t applySteer_global = 0;  //TODO:change this
 
-const uint8_t forceLKASPin = 0;	
-const uint8_t analogRotaryInputPin = 20;
+// const uint8_t forceLKASPin = 0;	
 uint16_t analogRotaryInputCenter = 450;
 
 uint8_t PB1_spoofLKASLeftDigitalRead = 1;
@@ -237,7 +236,12 @@ void handleInputReads(){
 		} else digitalWrite(BLUE_LED,LOW);
 		DIP1_spoofFullMCUDigitalRead = digitalRead(DIP1_spoofFullMCU);
 		A1_applySteeringPot = analogRead(A1_applySteeringPotPin);
-		forceApplyTorqueWithPOT = (A1_applySteeringPot - 478) / 1.8;
+		outputSerial.print(A1_applySteeringPot,DEC);
+		outputSerial.print("  -  ");
+		forceApplyTorqueWithPOT = (A1_applySteeringPot - 474) / 1.78;
+		outputSerial.println(forceApplyTorqueWithPOT,DEC);
+		
+		lastDigitalReadTime = millis();
 	} // end if true
 }
 
@@ -346,7 +350,7 @@ void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
 		else if(!PB2_spoofLKASRightDigitalRead) {
 			createKLinMessage(forceRightApplyTorque);
 			forceRightApplyTorque = random(130,150);
-		} else if(!PB4_spoofLKASSteerWithPOTEnablePin){
+		} else if(!PB4_spoofLKASSteerWithPOTEnableDigitalRead){
 			createKLinMessage(forceApplyTorqueWithPOT);
 		} else {
 			// sendArrayToSerial(LKAStoEPS_Serial,&lkas_off_array[incomingMsg.counterBit][0], 4); 
@@ -363,7 +367,7 @@ void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
 				for(uint8_t zz = 0; zz < 4; zz++){
 					canMsg.buf[zz] = incomingMsg.data[zz];
 				}
-				//FCAN.write(canMsg); // ****
+				FCAN.write(canMsg); // ****
 			}
 		}
 	}
@@ -460,10 +464,12 @@ void setup(){
 	EPStoLKAS_Serial.begin(9600,SERIAL_8E1);
 	LKAStoEPS_Serial.begin(9600,SERIAL_8E1);
 	outputSerial.begin(OUTPUTSERIAL_BAUD);
-	pinMode(analogRotaryInputPin,INPUT);
+	// pinMode(analogRotaryInputPin,INPUT);
 	pinMode(PB1_spoofLKASLeft, INPUT_PULLUP);
 	pinMode(PB2_spoofLKASRight, INPUT_PULLUP);
 	pinMode(PB3_spoofLKASStop, INPUT_PULLUP);
+	pinMode(PB4_spoofLKASSteerWithPOTEnablePin, INPUT_PULLUP);
+	pinMode(A1_applySteeringPotPin, INPUT_PULLUP);
 	pinMode(DIP1_spoofFullMCU, INPUT_PULLUP);
 	pinMode(BLUE_LED,OUTPUT);
 	pinMode(LED_BUILTIN, OUTPUT);
@@ -477,6 +483,7 @@ void loop(){
 	if((millis() - readLEDblinkLastChange) > 2000){
 		// outputSerial.println("LED change");
 		digitalWrite(LED_BUILTIN,!digitalRead(LED_BUILTIN));
+		// digitalWrite(BLUE_LED,!digitalRead(BLUE_LED));
 		readLEDblinkLastChange = millis();
 	} 
 }

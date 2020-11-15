@@ -23,7 +23,7 @@
 #define PB4_spoofLKASSteerWithPOTEnablePin 5
 #define DIP1_spoofFullMCU 6
 
-#define A1_applySteeringPotPin 26
+#define A1_applySteeringPotPin 17
 
 #define DIP1 6
 #define DIP2 32
@@ -39,7 +39,7 @@
 #define OUTPUTSERIAL_BAUD 921600
 
 #define BLUE_LED 28 //Used for signifying "manipulated" data
-#define TIME_BETWEEN_DIGITIAL_READS 250
+#define TIME_BETWEEN_DIGITIAL_READS 10 //in millis
 
 #define EPStoLKASCanMsgId 0x201
 #define LKAStoEPSCanMsgId 0x1AB //this is Steer torque request DEC 427
