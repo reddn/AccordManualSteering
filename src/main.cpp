@@ -419,18 +419,24 @@ void handleLKASFromCan(const CAN_message_t &msg){
 	// pull apply steer value
 	
 	// CAN message 
-	// Byte 1- B B B B S S S S
-	// Byte 2- S E C C H H H H
-	// Byte 3- CHECKSUM
+	// Byte 1- B B B S S S S S
+	// Byte 2- H H H H C C E B
+	// Byte 3- CHECKSUM<< REMOVED*
 	// B = BIg steer
 	// S = Small steer (used in createlinmsg)
 	// E = Enable LKAS (if zero. send lkas_off_msg)
-	// C = Counter. 4 bit 0-15
-	// CHECKSUM = guess
-	uint8_t lclBigSteer = msg.buf[0] >> 4;
-	uint8_t lclLittleSteer = (msg.buf[0] & B00001111 ) << 1;
-	lclLittleSteer = lclLittleSteer | (msg.buf[1] >> 7);
+	// C = Counter. 2 bit 0-3
+	// H = Checksum. 4 bit
+	if((msg.buf[1] & B00000010) >> 0){ // if STEER REQUEST (aka LKAS enabled)
+		// send lkas_off_message
+	}
 
+	uint8_t lclBigSteer = 0;
+	uint8_t lclLittleSteer = 0;
+	lclBigSteer = (msg.buf[1] & 0x01 ) << 3;
+	lclBigSteer = (msg.buf[0] >> 5) | lclBigSteer;
+
+	lclLittleSteer = msg.buf[0] & B00011111;
 	// verify counter is working
 	bool counterVerified = true;
 	// verify checksum
