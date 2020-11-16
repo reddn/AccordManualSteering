@@ -91,7 +91,9 @@ void spoofSteeringWheelTorqueData(uint8_t );
 // 																				*****	FUNCTIONS ***** 
 
 
-
+//This function takes the signed int to make it into a valid LKAStoEPS message for steering.  
+//Since everyting is triggered by the stock LKAS(MCU), the counter bits are synced on those messages.
+// so if there is no LKAStoEPS message from the stock MCU, nothing will be sent by this device.  i could change this later, but probably not
 void createKLinMessage(int16_t applySteer){
 	uint8_t msg[4];
 	msg[0] = 0;
@@ -135,6 +137,7 @@ void createKLinMessage(int16_t applySteer){
 	printArrayInBinary(&msg[0],4);
 }
 
+// same as above 'createKLinMessage', but this accepts only the bigSteer and littleSteer as variables
 void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSteer){
 	uint8_t msg[4];
 	msg[0] = (incomingMsg.counterBit << 5) |  bigSteer;
@@ -156,6 +159,7 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 	printArrayInBinary(&msg[0],4);
 }
 
+// creates the checksum for the LKAStoEPS message (its 3 bytes + 1 checksum for the frame)
 uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte){
 	uint16_t local = firstByte + secondByte + thirdByte ;
 	local = local % 512;
@@ -163,6 +167,7 @@ uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte){
 	return (uint8_t)(local % 256);
 }
 
+// creates checksum of the EPStoLKAS frame, 4 bytes + 1 checksum byte... overloaded
 uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte, uint8_t fourthByte){
 	uint16_t local = firstByte + secondByte + thirdByte + fourthByte;
 	local = local % 512;
@@ -170,6 +175,7 @@ uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte, uint8_t 
 	return (uint8_t)(local % 256);
 }
 
+//used to figure out what the LKAStoEPS message contained.. mainly the 'counterbit' is the biggest deal on the first byte
 void  deconstructLKASMessage(uint8_t msg){ //
 	//figure out which message byte your in.. check if first 2 bits are 0's
 	if(((msg >> 6) == 0)){
@@ -205,6 +211,8 @@ void  deconstructLKASMessage(uint8_t msg){ //
 	}
 } // deconstructLKASMessage(uint8_t msg)
 
+// called from loop function. used to check if any data is available, and to deal with any data received from the stock EPStoLKAS line
+//it all matters on if we are spoofing or no... so hence the switch statement
 void handleEPStoLKAS(){
 	if(EPStoLKAS_Serial.available())
 	{
@@ -222,7 +230,7 @@ void handleEPStoLKAS(){
 	}
 } // handleEPStoLKAS()
 
-
+//main loop function to check if any data was received on the stock LKAStoEPS line, then handle it spending on spoof settings 
 void handleLKAStoEPS(){
 	if(LKAStoEPS_Serial.available()){
 		uint8_t rcvdByte = LKAStoEPS_Serial.read();
@@ -242,8 +250,8 @@ void handleLKAStoEPS(){
 	} 
 } // handleLKAStoEPS()
 
-
-
+//prints the binary representation of a uint8_t (byte/char).  it also adds a space at between the two 4 bit segments, easier to read
+//the naming is pretty bad, but need to change it. 
 void printuint_t(uint8_t var) { ///i stole this from my program https://github.com/reddn/LIN2LINrepeaterMEGA, i think it should work
   for (uint8_t test = 0x80; test; test >>= 1) {
   	if(test == 0x8) outputSerial.write(' '); // 0x8 is 0000 1000.. so it gives a break between the 2 4 bit writes
@@ -251,6 +259,8 @@ void printuint_t(uint8_t var) { ///i stole this from my program https://github.c
   }
 }
 
+//prints an LKAS array to binary using the printuint_t function. it is almost the same as the printArrayInBinary, but this
+//assumes the pointer points to an array that is 4 bytes long, where printArrayInBinary requires a length attribute
 void printLKASArray(uint8_t *msg){ //msg is &array[0]
 	for(char zz = 0; zz<4; zz++){
 		printuint_t(*(msg+zz));
@@ -258,6 +268,7 @@ void printLKASArray(uint8_t *msg){ //msg is &array[0]
 	}
 }
 
+//prints any byte array to binary using the printuint_t for each byte, 2 spaces between each byte.
 void printArrayInBinary(uint8_t *msg,uint8_t size){ //msg is &array[0]  .. size is sizeof(array)
 	for(char zz = 0; zz<size; zz++){
 		if(zz != 0) outputSerial.print("  ");
@@ -265,6 +276,7 @@ void printArrayInBinary(uint8_t *msg,uint8_t size){ //msg is &array[0]  .. size 
 	}
 }
 
+//like printLKASarray, and printArrayInBinary, but only will print a 5 byte array.. this maybe deleted for printArrayInBinary
 void printEPSArray(uint8_t *msg){ //msg is array[0]
 	for(char zz = 0; zz<5; zz++){
 		printuint_t(*(msg+zz));
@@ -272,6 +284,7 @@ void printEPSArray(uint8_t *msg){ //msg is array[0]
 	}
 }
 
+//sends an array to a specified serial... i think this doenst work this way and will crash a program if used.. probably a good idea to remove it TODO
 void sendArrayToSerial(HardwareSerial serial,uint8_t *array,uint8_t arraySize){
 	serial.write(*array);
 	serial.write(*(array+1));
@@ -280,6 +293,7 @@ void sendArrayToSerial(HardwareSerial serial,uint8_t *array,uint8_t arraySize){
 	if(arraySize == 5) serial.write(*(array+4));
 }
 
+//the name says it all... 
 void sendArrayToLKAStoEPSSerial(uint8_t *array){
 	LKAStoEPS_Serial.write(*array);
 	LKAStoEPS_Serial.write(*(array+1));
@@ -288,6 +302,7 @@ void sendArrayToLKAStoEPSSerial(uint8_t *array){
 	// if(arraySize == 5) serial.write(*(array+4));
 }
 
+//the name says it all. requites 5 byte array pointer
 void sendArrayToEPStoLKASSerial(uint8_t *array){
 	EPStoLKAS_Serial.write(*array);
 	EPStoLKAS_Serial.write(*(array+1));
@@ -301,6 +316,9 @@ void sendArrayToEPStoLKASSerial(uint8_t *array){
 
 		// 		
 
+//if we are only forwarding the LKAStoEPS line, this is call.. ie, no spoofing.
+//sends the data to the CAN bus if sendLKAStoEPSRxToCan is true, thsi is for OP to capture for later review
+//although this function does print the data.. which probably should be bought out to its own function
 void handleLKAStoEPSNoSpoof(uint8_t rcvdByte){
 	LKAStoEPS_Serial.write(rcvdByte);
 	
@@ -320,6 +338,9 @@ void handleLKAStoEPSNoSpoof(uint8_t rcvdByte){
 	
 }
 
+//called if no spoofing is wanted (dip 1) for the EPStoLKAS line
+//it simply forwards the data on the to the LKAS but also prints some to the debug UART
+// and sends it to the CAN bus for OP (if enabled) when its at the end of the frame
 void handleEPStoLKASNoSpoof(uint8_t rcvdByte){
 	EPStoLKAS_Serial.write(rcvdByte);
 	EPStoLKASBuffer[EPStoLKASBufferCounter++]  = rcvdByte;
@@ -338,6 +359,10 @@ void handleEPStoLKASNoSpoof(uint8_t rcvdByte){
 	}
 }
 
+//if we are spoofing the LKAStoMCU line
+//only sends data if the byte shows its the first byte of the frame, which only the first byte has 00 as its MSB.
+//then its sees if the PB1,PB2,PB4 are press to send those torque request values.  if not. just send a normal
+//LKAS off value depending on the counterbit (so all counter bits are in sync)
 void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
 	if((rcvdByte >> 6) == 0){ //its the first byte
 		incomingMsg.totalCounter = 0;
@@ -372,6 +397,10 @@ void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
 	// no else... as all of the data is sent on when you receive the first byte....
 }
 
+//if we are spoofing the lines.. DIP1, the EPStoLKAS is being spoofed
+//we are trying to trick the MCU into thinking nothing is going on, so we only send back data showing no torque input
+//on the steering wheel, and matching checksums... this isn't good for the safety logic in the MCU, although it does receive
+//steering wheel position data from the CAN bus, so the steering torque data might be minimial.
 void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
 	if( (rcvdByte >> 6 )  == 0 ) EPStoLKASBufferCounter = 0;
 	else EPStoLKASBufferCounter++;
@@ -395,6 +424,8 @@ void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
 } // end function
 
 // message is actually 5, but im going to break out the steer values
+
+//sends a 5 byte array by pointer to the CANbus using the messageID set in define.cpp... 
 void sendEPStoLKASToCAN(uint8_t *EPSData){ // Sends the 5 byte frame to CAN for tracking in cabana
 	// TODO: send a can message for Steer torque so OP can see it
 
@@ -420,6 +451,8 @@ void sendEPStoLKASToCAN(uint8_t *EPSData){ // Sends the 5 byte frame to CAN for 
 	FCAN.write(msg);
 }
 
+//when OP port is finally coded, its going to send a steer torque command to the bus, the teensy will see that data and
+//after checking counter and checksum, will take the data and send it on the serial/LIN bus for steering torque application
 void handleLKASFromCan(const CAN_message_t &msg){
 	// pull apply steer value
 	
@@ -455,43 +488,48 @@ void handleLKASFromCan(const CAN_message_t &msg){
 	}
 }
 
+// function spoofs the 3rd and 4th bytes of data back to the LKAS (MCU), this keeps it happy and in the blind
+//but the driver torque data should be sent to it so it knows what is happening (or not happening) for its safety logic
 void passEPStoLKASTorqueData(uint8_t rcvdByte){
 	switch(EPStoLKASBufferCounter){
-		case 0:
+		case 0: // first byte received on EPStoLKAS 
 			EPStoLKAS_Serial.write(rcvdByte);
 			break;
-		case 1:
+		case 1: // second byte received on EPStoLKAS.  the 5th offset in the byte is the 'LKAS ON' signal back fom the EPS.
+		// this needs to be spoofed to '0' incase it raises an error(lkas on when the MCU says it should be)
+		// if the 4 second timer to apply a fake driver input is true, XOR the 3 LSB of the input driver to change the values
 			uint8_t lcldata;
 			if(spoofSteeringWheelTorqueDataBool){
-				lcldata = rcvdByte ^ B0010011;// XOR  .. offset 4 needs to be 0
+				lcldata = rcvdByte ^ B00100111;// XOR  .. offset 4 needs to be 0
 				EPStoLKAS_Serial.write(lcldata);// XOR
 				EPStoLKASBuffer[1] = lcldata;
 				spoofSteeringWheelTorqueDataBool = false;
 				
 			} else{
-				lcldata = rcvdByte ^ B0010000;// XOR  .. offset 4 needs to be 0
+				lcldata = rcvdByte ^ B00100000;// XOR  .. offset 4 needs to be 0
 				EPStoLKAS_Serial.write(lcldata);
 				EPStoLKASBuffer[1] = lcldata;
 			}
 			break;
-		default:
+		case 2: // third byte recieved ... on the third byte, the rest of the data doesnt matter as its spoofed. so send the rest now
 			EPStoLKAS_Serial.write(B11000000);
 			EPStoLKAS_Serial.write(B10000000);
 			uint8_t lclChecksum = chksm(EPStoLKASBuffer[0],EPStoLKASBuffer[1],B11000000,B1000000);
 			EPStoLKAS_Serial.write(lclChecksum);
 			break;
-
+		
 	}
 }
 
+// probably not going to be used as most of the commands in this function are replcated in the passEPStoLKASdata above.. 
+//so i just added an if statement in it to handle what this needed.
 void spoofSteeringWheelTorqueData(uint8_t rcvdByte){
-
-
-
-	// spoofSteeringWheelTorqueCounter++;
-
 }
 
+//called from the main loop.  reads only when needed by the TIME_BETWEEN_DIGIAL_READS define, in milliseconds
+//this helps from too many digitalRead calls slowing down reading from the other buses.
+//reads all Pushbuttons and DIP switches to set them into a variable.  
+//also reads the POT
 void handleInputReads(){
 	if( ( millis() - lastDigitalReadTime ) > TIME_BETWEEN_DIGITIAL_READS){
 		PB1_spoofLKASLeftDigitalRead = digitalRead(PB1_spoofLKASLeft);
@@ -520,9 +558,9 @@ void handleInputReads(){
 	} // end if true
 }
 
-
 // 			****** 				SETUP 					******
 
+// helper setup to setup the CAN bus.
 void canSetup(){
 	FCAN.begin();
 	FCAN.setBaudRate(500000);
