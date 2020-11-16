@@ -1,8 +1,8 @@
 #include <Arduino.h>
 #include <define.cpp>
-#include <globalvars.cpp>
 #include <struct.cpp>
 #include <FlexCAN_T4.h>
+#include <globalvars.cpp>
 
 
 // *****  Global Variables *****
