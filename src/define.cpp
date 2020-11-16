@@ -21,17 +21,17 @@
 #define PB2_spoofLKASRight 3
 #define PB3_spoofLKASStop 4
 #define PB4_spoofLKASSteerWithPOTEnablePin 5
-#define DIP1_spoofFullMCU 6
 
 #define A1_applySteeringPotPin 17
 
+#define DIP1_spoofFullMCU 6
 #define DIP1 6
 #define DIP2 32
 #define DIP3 33
 #define DIP4 9
 #define DIP5 10
-#define DIP6 11
-#define DIP7 12
+#define DIP6_passSteeringWheelTorqueData_PIN 11
+#define DIP7_SpoofSteeringWheelTorqueData_PIN 12
 
 #define sendEPStoLKASRxToCan false
 #define sendLKAStoEPSRxToCan false

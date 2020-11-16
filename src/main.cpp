@@ -33,6 +33,8 @@ int16_t forceRightApplyTorque = 40;
 int16_t forceApplyTorqueWithPOT = 0;
 
 uint8_t DIP1_spoofFullMCUDigitalRead = 0;
+uint8_t DIP6_passSteeringWheelTorqueData = 0;
+uint8_t DIP7_SpoofSteeringWheelTorqueData = 0;
 
 uint8_t EPStoLKASBuffer[5];
 uint8_t EPStoLKASBufferCounter = 0;
@@ -56,6 +58,10 @@ CAN_message_t canMsg;
 
 int A1_applySteeringPot = 0;
 
+bool spoofSteeringWheelTorqueDataBool = false;
+
+uint8_t spoofSteeringWheelTorqueData_Counter = 0;
+
 // 																		*****  FUNCTION DECLARATIONS  aka headers  *****
 
 void printuint_t(uint8_t );
@@ -63,6 +69,7 @@ void printArrayInBinary(uint8_t*, uint8_t);
 
 void createKLinMessage(int16_t );
 uint8_t chksm(uint8_t , uint8_t , uint8_t );
+uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte, uint8_t fourthByte);
 void  deconstructLKASMessage(uint8_t );
 void handleEPStoLKAS();
 void handleInputReads();
@@ -78,6 +85,8 @@ void sendLKAStoEPSFromCAN(uint8_t*);// might not use this one
 void handleLKASFromCan();
 void createKLinMessageWBigSteerAndLittleSteer(uint8_t,uint8_t);
 
+void passEPStoLKASTorqueData(uint8_t );
+void spoofSteeringWheelTorqueData(uint8_t );
 
 // 																				*****	FUNCTIONS ***** 
 
@@ -149,6 +158,13 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 
 uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte){
 	uint16_t local = firstByte + secondByte + thirdByte ;
+	local = local % 512;
+	local = 512 - local;
+	return (uint8_t)(local % 256);
+}
+
+uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte, uint8_t fourthByte){
+	uint16_t local = firstByte + secondByte + thirdByte + fourthByte;
 	local = local % 512;
 	local = 512 - local;
 	return (uint8_t)(local % 256);
@@ -226,24 +242,6 @@ void handleLKAStoEPS(){
 	} 
 } // handleLKAStoEPS()
 
-void handleInputReads(){
-	if( ( millis() - lastDigitalReadTime ) > TIME_BETWEEN_DIGITIAL_READS){
-		PB1_spoofLKASLeftDigitalRead = digitalRead(PB1_spoofLKASLeft);
-		PB2_spoofLKASRightDigitalRead = digitalRead(PB2_spoofLKASRight);
-		PB4_spoofLKASSteerWithPOTEnableDigitalRead = digitalRead(PB4_spoofLKASSteerWithPOTEnablePin);
-		if((!PB1_spoofLKASLeftDigitalRead) || (!PB2_spoofLKASRightDigitalRead)){
-			digitalWrite(BLUE_LED,HIGH);
-		} else digitalWrite(BLUE_LED,LOW);
-		DIP1_spoofFullMCUDigitalRead = digitalRead(DIP1_spoofFullMCU);
-		A1_applySteeringPot = analogRead(A1_applySteeringPotPin);
-		outputSerial.print(A1_applySteeringPot,DEC);
-		outputSerial.print("  -  ");
-		forceApplyTorqueWithPOT = (A1_applySteeringPot - 474) / 1.78;
-		outputSerial.println(forceApplyTorqueWithPOT,DEC);
-		
-		lastDigitalReadTime = millis();
-	} // end if true
-}
 
 
 void printuint_t(uint8_t var) { ///i stole this from my program https://github.com/reddn/LIN2LINrepeaterMEGA, i think it should work
@@ -375,20 +373,27 @@ void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
 }
 
 void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
-	if( (rcvdByte >> 6 )  == 0 ){
-		// sendArrayToSerial(EPStoLKAS_Serial , &eps_off_array[incomingMsg.counterBit][0], 5);
-		sendArrayToEPStoLKASSerial(&eps_off_array[incomingMsg.counterBit][0]);
-		EPStoLKASBufferCounter = 0;
-		// printArrayInBinary(&eps_off_array[incomingMsg.counterBit][0],5);
-	} else {
-		EPStoLKASBufferCounter++;
-		if(EPStoLKASBufferCounter == 5){
+	if( (rcvdByte >> 6 )  == 0 ) EPStoLKASBufferCounter = 0;
+	else EPStoLKASBufferCounter++;
+	EPStoLKASBuffer[0] = rcvdByte;
+
+	if(DIP6_passSteeringWheelTorqueData) passEPStoLKASTorqueData(rcvdByte);
+	else if(DIP7_SpoofSteeringWheelTorqueData)spoofSteeringWheelTorqueData(rcvdByte);
+	else {
+		if( EPStoLKASBufferCounter  == 0 ){ // first byte
+			sendArrayToEPStoLKASSerial(&eps_off_array[incomingMsg.counterBit][0]);
 			EPStoLKASBufferCounter = 0;
-			outputSerial.print("  ^  ");
-			printArrayInBinary(&eps_off_array[incomingMsg.counterBit][0],5);
-		}
-	}
-}
+			
+		} else {
+			if(EPStoLKASBufferCounter == 4){
+				EPStoLKASBufferCounter = 0;
+				outputSerial.print("  ^  ");
+				printArrayInBinary(&eps_off_array[incomingMsg.counterBit][0],5);
+			}// end if
+		}// end 2nd else
+	} // end 1st else
+} // end function
+
 // message is actually 5, but im going to break out the steer values
 void sendEPStoLKASToCAN(uint8_t *EPSData){ // Sends the 5 byte frame to CAN for tracking in cabana
 	// TODO: send a can message for Steer torque so OP can see it
@@ -450,6 +455,73 @@ void handleLKASFromCan(const CAN_message_t &msg){
 	}
 }
 
+void passEPStoLKASTorqueData(uint8_t rcvdByte){
+	switch(EPStoLKASBufferCounter){
+		case 0:
+			EPStoLKAS_Serial.write(rcvdByte);
+			break;
+		case 1:
+			uint8_t lcldata;
+			if(spoofSteeringWheelTorqueDataBool){
+				lcldata = rcvdByte ^ B0010011;// XOR  .. offset 4 needs to be 0
+				EPStoLKAS_Serial.write(lcldata);// XOR
+				EPStoLKASBuffer[1] = lcldata;
+				spoofSteeringWheelTorqueDataBool = false;
+				
+			} else{
+				lcldata = rcvdByte ^ B0010000;// XOR  .. offset 4 needs to be 0
+				EPStoLKAS_Serial.write(lcldata);
+				EPStoLKASBuffer[1] = lcldata;
+			}
+			break;
+		default:
+			EPStoLKAS_Serial.write(B11000000);
+			EPStoLKAS_Serial.write(B10000000);
+			uint8_t lclChecksum = chksm(EPStoLKASBuffer[0],EPStoLKASBuffer[1],B11000000,B1000000);
+			EPStoLKAS_Serial.write(lclChecksum);
+			break;
+
+	}
+}
+
+void spoofSteeringWheelTorqueData(uint8_t rcvdByte){
+
+
+
+	// spoofSteeringWheelTorqueCounter++;
+
+}
+
+void handleInputReads(){
+	if( ( millis() - lastDigitalReadTime ) > TIME_BETWEEN_DIGITIAL_READS){
+		PB1_spoofLKASLeftDigitalRead = digitalRead(PB1_spoofLKASLeft);
+		PB2_spoofLKASRightDigitalRead = digitalRead(PB2_spoofLKASRight);
+		PB4_spoofLKASSteerWithPOTEnableDigitalRead = digitalRead(PB4_spoofLKASSteerWithPOTEnablePin);
+		if((!PB1_spoofLKASLeftDigitalRead) || (!PB2_spoofLKASRightDigitalRead)){
+			digitalWrite(BLUE_LED,HIGH);
+		} else digitalWrite(BLUE_LED,LOW);
+
+		DIP1_spoofFullMCUDigitalRead = digitalRead(DIP1_spoofFullMCU);
+		DIP6_passSteeringWheelTorqueData = digitalRead(DIP6_passSteeringWheelTorqueData_PIN);
+		DIP7_SpoofSteeringWheelTorqueData = digitalRead(DIP7_SpoofSteeringWheelTorqueData_PIN);
+
+		A1_applySteeringPot = analogRead(A1_applySteeringPotPin);
+		forceApplyTorqueWithPOT = (A1_applySteeringPot - 474) / 1.78;
+		
+		// outputSerial.print(A1_applySteeringPot,DEC);
+		// outputSerial.print("  -  ");
+		// outputSerial.println(forceApplyTorqueWithPOT,DEC);
+		if(spoofSteeringWheelTorqueData_Counter++ > 400){
+			spoofSteeringWheelTorqueDataBool = true;
+			spoofSteeringWheelTorqueData_Counter = 0;
+		}
+
+		lastDigitalReadTime = millis();
+	} // end if true
+}
+
+
+// 			****** 				SETUP 					******
 
 void canSetup(){
 	FCAN.begin();
@@ -465,7 +537,6 @@ void canSetup(){
 	FCAN.setFIFOFilter(0, LKAStoEPSCanMsgId, STD); // Set filter0 to allow STANDARD CAN ID 0x123 to be collected by FIFO. 
 }
 
-// 			****** 				SETUP 					******
 void setup(){	
 	EPStoLKAS_Serial.begin(9600,SERIAL_8E1);
 	LKAStoEPS_Serial.begin(9600,SERIAL_8E1);
@@ -477,6 +548,7 @@ void setup(){
 	pinMode(PB4_spoofLKASSteerWithPOTEnablePin, INPUT_PULLUP);
 	pinMode(A1_applySteeringPotPin, INPUT_PULLUP);
 	pinMode(DIP1_spoofFullMCU, INPUT_PULLUP);
+	pinMode(DIP7_SpoofSteeringWheelTorqueData, INPUT_PULLUP);
 	pinMode(BLUE_LED,OUTPUT);
 	pinMode(LED_BUILTIN, OUTPUT);
 	canSetup();
