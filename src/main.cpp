@@ -62,6 +62,11 @@ bool spoofSteeringWheelTorqueDataBool = false;
 
 uint8_t spoofSteeringWheelTorqueData_Counter = 0;
 
+bool OPLkasActive = false;
+uint8_t OPBigSteer = 0;
+uint8_t OPLittleSteer = 0;
+unsigned long OPTimeLastCANRecieved = 0;
+
 // 																		*****  FUNCTION DECLARATIONS  aka headers  *****
 
 void printuint_t(uint8_t );
@@ -457,9 +462,9 @@ void handleLKASFromCan(const CAN_message_t &msg){
 	// pull apply steer value
 	
 	// CAN message 
+	//     MSB				   LSB
 	// Byte 1- B B B S S S S S
 	// Byte 2- H H H H C C E B
-	// Byte 3- CHECKSUM<< REMOVED*
 	// B = BIg steer
 	// S = Small steer (used in createlinmsg)
 	// E = Enable LKAS (if zero. send lkas_off_msg)
@@ -467,6 +472,8 @@ void handleLKASFromCan(const CAN_message_t &msg){
 	// H = Checksum. 4 bit
 	if((msg.buf[1] & B00000010) >> 0){ // if STEER REQUEST (aka LKAS enabled)
 		// send lkas_off_message
+		OPLkasActive = false;
+		return;
 	}
 
 	uint8_t lclBigSteer = 0;
@@ -475,15 +482,23 @@ void handleLKASFromCan(const CAN_message_t &msg){
 	lclBigSteer = (msg.buf[0] >> 5) | lclBigSteer;
 
 	lclLittleSteer = msg.buf[0] & B00011111;
-	// verify counter is working
+	// TODO: verify counter is working
 	bool counterVerified = true;
-	// verify checksum
+	// TODO: verify checksum
 	bool checksumVerified = true;
+
+	
+
 	// set big/small steer in varible and that LKAS is on
 	// so when its time to send a LKAS message, it just reads the data, make the checksum and send it
 	if(counterVerified && checksumVerified){
-		createKLinMessageWBigSteerAndLittleSteer(lclBigSteer,lclLittleSteer);
+		// createKLinMessageWBigSteerAndLittleSteer(lclBigSteer,lclLittleSteer);
+		OPLkasActive = true;
+		OPBigSteer = lclBigSteer;
+		OPLittleSteer = lclLittleSteer;
+		OPTimeLastCANRecieved = millis();
 	} else{
+		OPLkasActive = false;
 		// TODO: send/set/notify something to show there was an error... 
 	}
 }
