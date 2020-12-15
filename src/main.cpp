@@ -70,6 +70,13 @@ unsigned long OPTimeLastCANRecieved = 0;
 
 uint8_t EPStoLKASCanFrameCounter = 0;
 
+uint8_t LkasFromCanCounter = 0;
+uint8_t LkasFromCanCounterErrorCount = 0;
+
+uint8_t LkasFromCanChecksumErrorCount = 0;
+
+uint8_t LkasFromCanFatalError = 0;
+
 // 																		*****  FUNCTION DECLARATIONS  aka headers  *****
 
 void printuint_t(uint8_t );
@@ -98,7 +105,9 @@ void spoofSteeringWheelTorqueData(uint8_t );
 
 void handleLKAStoEPSUsingOPCan();
 
-uint8_t honda_compute_checksum(uint8_t *steerTorqueAndMotorTorque, uint8_t size);
+uint8_t honda_compute_checksum(uint8_t *steerTorqueAndMotorTorque, uint8_t size); // << From Comma.ai Panda safety_honda.h licensed unde MIT
+
+void handleLkasFromCanV2(const CAN_message_t &msg);
 
 // 																				*****	FUNCTIONS ***** 
 
@@ -506,6 +515,7 @@ void handleLKASFromCan(const CAN_message_t &msg){
 	// E = Enable LKAS (if zero. send lkas_off_msg)
 	// C = Counter. 2 bit 0-3
 	// H = Checksum. 4 bit
+
 	if((msg.buf[1] & B00000010) >> 0){ // if STEER REQUEST (aka LKAS enabled)
 		// send lkas_off_message
 		OPLkasActive = false;
@@ -523,8 +533,6 @@ void handleLKASFromCan(const CAN_message_t &msg){
 	// TODO: verify checksum
 	bool checksumVerified = true;
 
-	
-
 	// set big/small steer in varible and that LKAS is on
 	// so when its time to send a LKAS message, it just reads the data, make the checksum and send it
 	if(counterVerified && checksumVerified){
@@ -539,8 +547,69 @@ void handleLKASFromCan(const CAN_message_t &msg){
 	}
 }
 
-void handleLKAStoEPSUsingOPCan(){
+void handleLkasFromCanV2(){
+	// BO_ 228 STEERING_CONTROL: 3 EON
+//  SG_ STEER_TORQUE_REQUEST : 9|1@0+ (1,0) [0|1] "" EPS
+//  SG_ STEER_TORQUE : 0|9@0- (1,0) [-256|255] "" EPS
+//  SG_ COUNTER : 21|2@0+ (1,0) [0|3] "" EPS
+//  SG_ CHECKSUM : 19|4@0+ (1,0) [0|15] "" EPS
+	//new version
+	// B B B S  S S S S
+	// 0 0 0 0  0 0 R B
+	// 0 0 C C  H H H H
 
+	if((canMsg.buf[1]>> 1) == 1 ){ // if STEER REQUEST (aka LKAS enabled)
+		OPLkasActive = true;
+	} else {
+		OPLkasActive = false;
+	}
+
+	uint8_t lclBigSteer = 0;
+	uint8_t lclLittleSteer = 0;
+	lclBigSteer = (canMsg.buf[1] & 0x01 ) << 3;
+	lclBigSteer |= canMsg.buf[0] >> 5;
+
+	lclLittleSteer = canMsg.buf[0] & B00011111;
+
+	// TODO: verify counter is working
+	uint8_t lclCounter = canMsg.buf[2] >> 4;
+	bool counterVerified = false;  // need global counter   and counter error
+
+	if(LkasFromCanCounter != lclCounter) LkasFromCanCounterErrorCount++;
+	else LkasFromCanCounterErrorCount = 0;
+	
+	if(LkasFromCanCounter < 3) counterVerified = true;
+
+
+	// TODO: verify checksum
+	bool checksumVerified = false;
+
+	if(honda_compute_checksum((uint8_t*) &canMsg.buf[0],3) == (canMsg.buf[3] & B00001111 )) LkasFromCanChecksumErrorCount = 0;
+	else LkasFromCanChecksumErrorCount++;
+	
+	if(LkasFromCanCounterErrorCount < 3 ) checksumVerified = true;
+	else checksumVerified = false;
+
+	//canbus data time is checked in the handleLkastoEPS function, if no data has been received within 50ms . LKAS is not allowed to be active
+
+	// set big/small steer in varible and that LKAS is on
+	// so when its time to send a LKAS message, it just reads the data, make the checksum and send it
+	if(counterVerified && checksumVerified){
+		// createKLinMessageWBigSteerAndLittleSteer(lclBigSteer,lclLittleSteer);
+		OPLkasActive = true;
+		OPBigSteer = lclBigSteer;
+		OPLittleSteer = lclLittleSteer;
+		
+	} else{
+		OPLkasActive = false;
+		// TODO: send/set/notify something to show there was an error... 
+	}
+	OPTimeLastCANRecieved = millis();
+
+}
+
+void handleLKAStoEPSUsingOPCan(){
+	//TODO: need to check last msg rcvd from can to see if LKAS active should be on... check fatal error.  
 
 }
 
@@ -583,8 +652,8 @@ void spoofSteeringWheelTorqueData(uint8_t rcvdByte){
 }
 
 
-//code taken from safety_honda.h  Credit Comma.ai MIT license on this function only
-uint8_t honda_compute_checksum(uint8_t *steerTorqueAndMotorTorque[], uint8_t len) {
+//code mostly taken from safety_honda.h  Credit Comma.ai MIT license on this function only
+uint8_t honda_compute_checksum(uint8_t *steerTorqueAndMotorTorque, uint8_t len) {
 //   int len = GET_LEN(to_push);
   uint8_t checksum = 0U;
   unsigned int addr = 399U; //this should be set up top... 399 is STEER STATUS
@@ -592,7 +661,7 @@ uint8_t honda_compute_checksum(uint8_t *steerTorqueAndMotorTorque[], uint8_t len
     checksum += (addr & 0xFU); addr >>= 4;
   }
   for (int j = 0; j < len; j++) {
-    uint8_t byte = *steerTorqueAndMotorTorque[j];
+    uint8_t byte = *(steerTorqueAndMotorTorque + j);
     checksum += (byte & 0xFU) + (byte >> 4U);
     if (j == (len - 1)) {
       checksum -= (byte & 0xFU);  // remove checksum in message
@@ -637,19 +706,19 @@ void handleInputReads(){
 // 			****** 				SETUP 					******
 
 // helper setup to setup the CAN bus.  
-void canSetup(){
-	FCAN.begin();
-	FCAN.setBaudRate(500000);
-	FCAN.setMaxMB(16);
-	FCAN.enableFIFO();
-	FCAN.enableFIFOInterrupt();
-	FCAN.onReceive(handleLKASFromCan);
-	FCAN.mailboxStatus();
+// void canSetup(){
+// 	FCAN.begin();
+// 	FCAN.setBaudRate(500000);
+// 	FCAN.setMaxMB(16);
+// 	FCAN.enableFIFO();
+// 	FCAN.enableFIFOInterrupt();
+// 	FCAN.onReceive(handleLKASFromCanV2);
+// 	FCAN.mailboxStatus();
 
-	FCAN.setFIFOFilter(REJECT_ALL);
-	FCAN.setMBFilter(REJECT_ALL);
-	FCAN.setFIFOFilter(0, LKAStoEPSCanMsgId, STD); // Set filter0 to allow STANDARD CAN ID 0x123 to be collected by FIFO. 
-}
+// 	FCAN.setFIFOFilter(REJECT_ALL);
+// 	FCAN.setMBFilter(REJECT_ALL);
+// 	FCAN.setFIFOFilter(0, LKAStoEPSCanMsgId, STD); // Set filter0 to allow STANDARD CAN ID 0x123 to be collected by FIFO. 
+// }
 
 void setup(){	
 	EPStoLKAS_Serial.begin(9600,SERIAL_8E1);
@@ -665,12 +734,15 @@ void setup(){
 	pinMode(DIP7_SpoofSteeringWheelTorqueData, INPUT_PULLUP);
 	pinMode(BLUE_LED,OUTPUT);
 	pinMode(LED_BUILTIN, OUTPUT);
-	canSetup();
-	// FCAN.begin();
-	// FCAN.setBaudRate(500000);
+	// canSetup();
+	FCAN.begin();
+	FCAN.setBaudRate(500000);
 }
 
 void loop(){
+	if(FCAN.read(canMsg)){
+		handleLkasFromCanV2();
+	}
 	handleEPStoLKAS();
 	handleLKAStoEPS();
 	handleInputReads();
