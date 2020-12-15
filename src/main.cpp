@@ -32,9 +32,10 @@ int16_t forceLeftApplyTorque = -30;
 int16_t forceRightApplyTorque = 40;
 int16_t forceApplyTorqueWithPOT = 0;
 
-uint8_t DIP1_spoofFullMCUDigitalRead = 0;
-uint8_t DIP6_passSteeringWheelTorqueData = 0;
-uint8_t DIP7_SpoofSteeringWheelTorqueData = 0;
+uint8_t DIP1_spoofFullMCUDigitalRead = 1;
+uint8_t DIP2_sendOPSteeringTorque = 1;
+uint8_t DIP6_passSteeringWheelTorqueData = 1;
+uint8_t DIP7_SpoofSteeringWheelTorqueData = 1;
 
 uint8_t EPStoLKASBuffer[5];
 uint8_t EPStoLKASBufferCounter = 0;
@@ -67,6 +68,8 @@ uint8_t OPBigSteer = 0;
 uint8_t OPLittleSteer = 0;
 unsigned long OPTimeLastCANRecieved = 0;
 
+uint8_t EPStoLKASCanFrameCounter = 0;
+
 // 																		*****  FUNCTION DECLARATIONS  aka headers  *****
 
 void printuint_t(uint8_t );
@@ -92,6 +95,10 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t,uint8_t);
 
 void passEPStoLKASTorqueData(uint8_t );
 void spoofSteeringWheelTorqueData(uint8_t );
+
+void handleLKAStoEPSUsingOPCan();
+
+uint8_t honda_compute_checksum(uint8_t *steerTorqueAndMotorTorque, uint8_t size);
 
 // 																				*****	FUNCTIONS ***** 
 
@@ -240,19 +247,15 @@ void handleLKAStoEPS(){
 	if(LKAStoEPS_Serial.available()){
 		uint8_t rcvdByte = LKAStoEPS_Serial.read();
 		deconstructLKASMessage(rcvdByte);
-		uint8_t invertDIP1_spoofFullMCUDigitalRead = !DIP1_spoofFullMCUDigitalRead;
 		if((rcvdByte >> 6) == 0){ //its the first byte
 			EPStoLKASBufferCounter = 0;
 		}
-		switch(invertDIP1_spoofFullMCUDigitalRead){
-			case 0: // do not spoof MCU... relay or modify
-				handleLKAStoEPSNoSpoof(rcvdByte);
-				break;
-			case 1: // spoof MCU
-				handleLKAStoMCUSpoofMCU(rcvdByte);
-				break;
-		}
+		if(!DIP2_sendOPSteeringTorque) handleLKAStoEPSUsingOPCan();
+		else if(DIP1_spoofFullMCUDigitalRead) handleLKAStoEPSNoSpoof(rcvdByte); //do not spoof MCU.. relay or modify
+		else if(!DIP1_spoofFullMCUDigitalRead) handleLKAStoMCUSpoofMCU(rcvdByte); // spoof MCU
+
 	} 
+
 } // handleLKAStoEPS()
 
 //prints the binary representation of a uint8_t (byte/char).  it also adds a space at between the two 4 bit segments, easier to read
@@ -409,7 +412,7 @@ void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
 void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
 	if( (rcvdByte >> 6 )  == 0 ) EPStoLKASBufferCounter = 0;
 	else EPStoLKASBufferCounter++;
-	EPStoLKASBuffer[0] = rcvdByte;
+	EPStoLKASBuffer[EPStoLKASBufferCounter] = rcvdByte;
 
 	if(DIP6_passSteeringWheelTorqueData) passEPStoLKASTorqueData(rcvdByte);
 	else if(DIP7_SpoofSteeringWheelTorqueData)spoofSteeringWheelTorqueData(rcvdByte);
@@ -426,6 +429,39 @@ void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
 			}// end if
 		}// end 2nd else
 	} // end 1st else
+	if(EPStoLKASBufferCounter == 4){
+		canMsg.id = 0x201;
+		canMsg.len = 5;
+		for(uint8_t zz = 0; zz < 5; zz++){
+			canMsg.buf[zz] = EPStoLKASBuffer[zz];
+		}
+		FCAN.write(canMsg); // ****
+
+		// the format will be
+		//B   # # # #  # # # #    # # # #   # # # #    # # # 0  0 # # #    0 0 C C  H H H H       
+		//    |DriverSteer Torque9|
+		//     3rd byte offest 6-1  |
+		//  						  |Motor Steer Torque9 |
+		//						  	   3 bits 3rd byte offset 0-2 |   |
+		//																Counter     Checksum
+		uint8_t steerTorqueAndMotorTorque[4] = {0,0,0,0};
+		// uint8_t tempData = 0;
+		steerTorqueAndMotorTorque[0] = EPStoLKASBuffer[0] << 5;
+		steerTorqueAndMotorTorque[0] = ( ( EPStoLKASBuffer[1] > 1 ) & B00011111 ) | steerTorqueAndMotorTorque[0];
+
+		steerTorqueAndMotorTorque[1] = EPStoLKASBuffer[1] << 7;
+		steerTorqueAndMotorTorque[1] = ( EPStoLKASBuffer[1] & B0100000 ) | steerTorqueAndMotorTorque[1];
+		steerTorqueAndMotorTorque[1] = ( EPStoLKASBuffer[2] & B00110000) | steerTorqueAndMotorTorque[1];
+		steerTorqueAndMotorTorque[1] = ( ( EPStoLKASBuffer[3] >> 3 ) & B00001111 ) | steerTorqueAndMotorTorque[1];
+		
+		steerTorqueAndMotorTorque[2] = ( EPStoLKASBuffer[4] << 5 );
+		steerTorqueAndMotorTorque[2] = ( EPStoLKASBuffer[3] & B00000111) | steerTorqueAndMotorTorque[2];
+
+		steerTorqueAndMotorTorque[3] = EPStoLKASCanFrameCounter << 4;
+		steerTorqueAndMotorTorque[3] = honda_compute_checksum(&steerTorqueAndMotorTorque[0], 4) |  steerTorqueAndMotorTorque[3];
+		
+		if(++EPStoLKASCanFrameCounter >3) EPStoLKASCanFrameCounter = 0;
+	}
 } // end function
 
 // message is actually 5, but im going to break out the steer values
@@ -464,7 +500,7 @@ void handleLKASFromCan(const CAN_message_t &msg){
 	// CAN message 
 	//     MSB				   LSB
 	// Byte 1- B B B S S S S S
-	// Byte 2- H H H H C C E B
+	// Byte 2- H H H H C C E B  ******************  TODO: it must be * * C C H H H H   I think i changed this in the DBC but didnt update this... 
 	// B = BIg steer
 	// S = Small steer (used in createlinmsg)
 	// E = Enable LKAS (if zero. send lkas_off_msg)
@@ -501,6 +537,11 @@ void handleLKASFromCan(const CAN_message_t &msg){
 		OPLkasActive = false;
 		// TODO: send/set/notify something to show there was an error... 
 	}
+}
+
+void handleLKAStoEPSUsingOPCan(){
+
+
 }
 
 // function spoofs the 3rd and 4th bytes of data back to the LKAS (MCU), this keeps it happy and in the blind
@@ -541,6 +582,25 @@ void passEPStoLKASTorqueData(uint8_t rcvdByte){
 void spoofSteeringWheelTorqueData(uint8_t rcvdByte){
 }
 
+
+//code taken from safety_honda.h  Credit Comma.ai MIT license on this function only
+uint8_t honda_compute_checksum(uint8_t *steerTorqueAndMotorTorque[], uint8_t len) {
+//   int len = GET_LEN(to_push);
+  uint8_t checksum = 0U;
+  unsigned int addr = 399U; //this should be set up top... 399 is STEER STATUS
+  while (addr > 0U) {
+    checksum += (addr & 0xFU); addr >>= 4;
+  }
+  for (int j = 0; j < len; j++) {
+    uint8_t byte = *steerTorqueAndMotorTorque[j];
+    checksum += (byte & 0xFU) + (byte >> 4U);
+    if (j == (len - 1)) {
+      checksum -= (byte & 0xFU);  // remove checksum in message
+    }
+  }
+  return (8U - checksum) & 0xFU;
+}
+
 //called from the main loop.  reads only when needed by the TIME_BETWEEN_DIGIAL_READS define, in milliseconds
 //this helps from too many digitalRead calls slowing down reading from the other buses.
 //reads all Pushbuttons and DIP switches to set them into a variable.  
@@ -555,6 +615,7 @@ void handleInputReads(){
 		} else digitalWrite(BLUE_LED,LOW);
 
 		DIP1_spoofFullMCUDigitalRead = digitalRead(DIP1_spoofFullMCU);
+		DIP2_sendOPSteeringTorque = digitalRead(DIP2);
 		DIP6_passSteeringWheelTorqueData = digitalRead(DIP6_passSteeringWheelTorqueData_PIN);
 		DIP7_SpoofSteeringWheelTorqueData = digitalRead(DIP7_SpoofSteeringWheelTorqueData_PIN);
 
@@ -575,7 +636,7 @@ void handleInputReads(){
 
 // 			****** 				SETUP 					******
 
-// helper setup to setup the CAN bus.
+// helper setup to setup the CAN bus.  
 void canSetup(){
 	FCAN.begin();
 	FCAN.setBaudRate(500000);
@@ -605,6 +666,8 @@ void setup(){
 	pinMode(BLUE_LED,OUTPUT);
 	pinMode(LED_BUILTIN, OUTPUT);
 	canSetup();
+	// FCAN.begin();
+	// FCAN.setBaudRate(500000);
 }
 
 void loop(){
