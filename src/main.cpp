@@ -625,7 +625,7 @@ void handleLKAStoEPSUsingOPCan(){
 		LkasFromCanFatalError = true;
 		Serial.println("Time ");
 	}
-	if(  )
+	
 }
 
 // function spoofs the 3rd and 4th bytes of data back to the LKAS (MCU), this keeps it happy and in the blind
