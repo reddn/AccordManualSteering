@@ -694,9 +694,9 @@ void handleInputReads(){
 		PB1_spoofLKASLeftDigitalRead = digitalRead(PB1_spoofLKASLeft);
 		PB2_spoofLKASRightDigitalRead = digitalRead(PB2_spoofLKASRight);
 		PB4_spoofLKASSteerWithPOTEnableDigitalRead = digitalRead(PB4_spoofLKASSteerWithPOTEnablePin);
-		if((!PB1_spoofLKASLeftDigitalRead) || (!PB2_spoofLKASRightDigitalRead)){
-			digitalWrite(BLUE_LED,HIGH);
-		} else digitalWrite(BLUE_LED,LOW);
+		// if((!PB1_spoofLKASLeftDigitalRead) || (!PB2_spoofLKASRightDigitalRead)){
+		// 	digitalWrite(BLUE_LED,HIGH);
+		// } else digitalWrite(BLUE_LED,LOW);
 
 		DIP1_spoofFullMCUDigitalRead = digitalRead(DIP1_spoofFullMCU);
 		DIP2_sendOPSteeringTorque = digitalRead(DIP2);
@@ -714,6 +714,7 @@ void handleInputReads(){
 			spoofSteeringWheelTorqueData_Counter = 0;
 		}
 
+		digitalWrite(BLUE_LED,!DIP2_sendOPSteeringTorque);
 		lastDigitalReadTime = millis();
 	} // end if true
 }
