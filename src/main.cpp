@@ -169,7 +169,7 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 	msg[1] = littleSteer | 0xA0;  // 1010 0000
 	//								   ^ lkas on
 	msg[2] = 0x80; // this is static 0x80 = 1000 0000
-	
+	//										 ^ lkas on (1 is off)
 	msg[3] = chksm(msg[0], msg[1], msg[2]);
 
 	LKAStoEPS_Serial.write(msg[1]);
@@ -259,9 +259,9 @@ void handleLKAStoEPS(){
 		if((rcvdByte >> 6) == 0){ //its the first byte
 			EPStoLKASBufferCounter = 0;
 		}
-		if(!DIP2_sendOPSteeringTorque) handleLKAStoEPSUsingOPCan();
-		else if(DIP1_spoofFullMCUDigitalRead) handleLKAStoEPSNoSpoof(rcvdByte); //do not spoof MCU.. relay or modify
-		else if(!DIP1_spoofFullMCUDigitalRead) handleLKAStoMCUSpoofMCU(rcvdByte); // spoof MCU
+		if(!DIP2_sendOPSteeringTorque) handleLKAStoEPSUsingOPCan();// DIP 2 On
+		else if(!DIP1_spoofFullMCUDigitalRead) handleLKAStoMCUSpoofMCU(rcvdByte); //DIP1 On  -  spoof MCU
+		else if(DIP1_spoofFullMCUDigitalRead) handleLKAStoEPSNoSpoof(rcvdByte); //DIP1 Off -  do not spoof MCU.. relay or modify
 
 	} 
 
@@ -610,7 +610,22 @@ void handleLkasFromCanV2(){
 
 void handleLKAStoEPSUsingOPCan(){
 	//TODO: need to check last msg rcvd from can to see if LKAS active should be on... check fatal error.  
+	// if fatal error is set, only send LKAS OFF packets, do not engage
+	if(LkasFromCanFatalError || !(OPLkasActive) ) {
+		sendArrayToLKAStoEPSSerial(&lkas_off_array[incomingMsg.counterBit][0]);
+		return;
+	}
 
+	if(OPLkasActive) {
+		createKLinMessageWBigSteerAndLittleSteer(OPBigSteer,OPLittleSteer);
+	}
+
+	if( (   ( millis() - OPTimeLastCANRecieved )   > 100 ) && OPLkasActive){
+		sendArrayToLKAStoEPSSerial(&lkas_off_array[incomingMsg.counterBit][0]);
+		LkasFromCanFatalError = true;
+		Serial.println("Time ");
+	}
+	if(  )
 }
 
 // function spoofs the 3rd and 4th bytes of data back to the LKAS (MCU), this keeps it happy and in the blind
