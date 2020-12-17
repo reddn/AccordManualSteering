@@ -497,9 +497,8 @@ void sendEPStoLKASToCAN(uint8_t *EPSData){ // Sends the 5 byte frame to CAN for 
 
 // BO_ 427 STEER_MOTOR_TORQUE: 3 EPS
 //  SG_ MOTOR_TORQUE : 0|9@0+ (1,0) [0|256] "" EON
-//  SG_ UNK_3BIT_1 : 11|1@0+ (1,0) [0|1] "" EON
-//  SG_ UNK_3BIT_2 : 12|1@0+ (1,0) [0|1] "" EON
-//  SG_ UNK_3BIT_3 : 13|1@0+ (1,0) [0|1] "" EON
+//  SG_ OUTPUT_DISABLED_INVERT : 13|1@0+ (1,0) [0|1] "not sure if its invert or some LDW" EON
+//  SG_ UNK_3BIT_1 : 14|1@0+ (1,0) [0|1] "" EON
 //  SG_ OUTPUT_DISABLED : 22|1@0+ (1,0) [0|1] "" EON
 //  SG_ COUNTER : 21|2@0+ (1,0) [0|3] "" EON
 //  SG_ CHECKSUM : 19|4@0+ (1,0) [0|15] "" EON
@@ -513,7 +512,8 @@ void buildSteerMotorTorqueCanMsg(){ //TODO: add to decclaration
 	msg.buf[0] = EPStoLKASBuffer[0] << 5;  
 	msg.buf[0] |= EPStoLKASBuffer[1] & B00011111;
 	msg.buf[1] = ( EPStoLKASBuffer[0] >>3 ) & B00000001;
-	msg.buf[2] = 0;
+	msg.buf[1] |= EPStoLKASBuffer[1] & B01100000;
+	msg.buf[2] =  EPStoLKASBuffer[3] & B01000000;
 }
 
 ///// the only thing in this DBC that should be used is steeor_troque_sensor
