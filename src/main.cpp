@@ -704,6 +704,7 @@ void handleInputReads(){
 		DIP7_SpoofSteeringWheelTorqueData = digitalRead(DIP7_SpoofSteeringWheelTorqueData_PIN);
 
 		A1_applySteeringPot = analogRead(A1_applySteeringPotPin);
+		
 		forceApplyTorqueWithPOT = (A1_applySteeringPot - 474) / 1.78;
 		
 		// outputSerial.print(A1_applySteeringPot,DEC);
@@ -714,7 +715,9 @@ void handleInputReads(){
 			spoofSteeringWheelTorqueData_Counter = 0;
 		}
 
-		digitalWrite(BLUE_LED,!DIP2_sendOPSteeringTorque);
+		// digitalWrite(BLUE_LED,!DIP2_sendOPSteeringTorque);
+		if(DIP2_sendOPSteeringTorque) digitalWrite(BLUE_LED,LOW);
+		else digitalWrite(BLUE_LED,HIGH);
 		lastDigitalReadTime = millis();
 	} // end if true
 }
@@ -747,6 +750,7 @@ void setup(){
 	pinMode(PB4_spoofLKASSteerWithPOTEnablePin, INPUT_PULLUP);
 	pinMode(A1_applySteeringPotPin, INPUT_PULLUP);
 	pinMode(DIP1_spoofFullMCU, INPUT_PULLUP);
+	pinMode(DIP2,INPUT_PULLUP);
 	pinMode(DIP7_SpoofSteeringWheelTorqueData, INPUT_PULLUP);
 	pinMode(BLUE_LED,OUTPUT);
 	pinMode(LED_BUILTIN, OUTPUT);

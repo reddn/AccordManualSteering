@@ -39,7 +39,7 @@
 #define OUTPUTSERIAL_BAUD 921600
 
 #define BLUE_LED 28 //Used for signifying "manipulated" data
-#define TIME_BETWEEN_DIGITIAL_READS 10 //in millis
+#define TIME_BETWEEN_DIGITIAL_READS 50 //in millis
 
 #define EPStoLKASCanMsgId 0x201
 #define LKAStoEPSCanMsgId 0x1AB //this is Steer torque request DEC 427
