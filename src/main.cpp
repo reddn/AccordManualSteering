@@ -53,7 +53,7 @@ uint8_t nextCounterBit = 0;
  
 int8_t LkasOnIntroCountDown = 5; // sends 5 frames of LKAS on and 0 apply steer.. the stock LKAS does this. but I dont think its needed
 
-FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> FCAN;
+FlexCAN_T4<CAN1, RX_SIZE_512, TX_SIZE_128> FCAN;
 
 CAN_message_t canMsg;
 
@@ -76,6 +76,8 @@ uint8_t LkasFromCanCounterErrorCount = 0;
 uint8_t LkasFromCanChecksumErrorCount = 0;
 
 uint8_t LkasFromCanFatalError = 0;
+
+uint8_t OPCanCounter = 0;
 
 // 																		*****  FUNCTION DECLARATIONS  aka headers  *****
 
@@ -107,6 +109,7 @@ void spoofSteeringWheelTorqueData(uint8_t );
 void handleLkasFromCanV2(const CAN_message_t &msg);
 void handleLKAStoEPSUsingOPCan();
 void handleEPStoLKASOP(uint8_t rcvdByte);
+void handleEPStoLKASKeepMcuHappy(uint8_t rcvdByte);
 
 uint8_t honda_compute_checksum(uint8_t *steerTorqueAndMotorTorque, uint8_t size); // << From Comma.ai Panda safety_honda.h licensed unde MIT
 
@@ -229,10 +232,16 @@ void handleEPStoLKAS(){
 	if(EPStoLKAS_Serial.available())
 	{
 		uint8_t rcvdByte = EPStoLKAS_Serial.read();
-		
+		EPStoLKASBuffer[EPStoLKASBufferCounter] = rcvdByte;
 
-		if(!DIP2_sendOPSteeringTorque) handleEPStoLKASOP(rcvdByte);
-		else if(!DIP1_spoofFullMCUDigitalRead) handleEPStoLKASSpoofMCU(rcvdByte);  //spoof MCU
+
+		if(!DIP2_sendOPSteeringTorque) {
+			handleEPStoLKASOP(rcvdByte);
+			handleEPStoLKASKeepMcuHappy(rcvdByte);
+		}	
+		else if(!DIP1_spoofFullMCUDigitalRead) {
+			handleEPStoLKASSpoofMCU(rcvdByte);  //spoof MCU
+		}
 		else handleEPStoLKASNoSpoof(rcvdByte); // do not spoof.... relay or ???
 
 		EPStoLKASBufferCounter++;
@@ -348,10 +357,9 @@ void handleLKAStoEPSNoSpoof(uint8_t rcvdByte){
 // and sends it to the CAN bus for OP (if enabled) when its at the end of the frame
 void handleEPStoLKASNoSpoof(uint8_t rcvdByte){
 	EPStoLKAS_Serial.write(rcvdByte);
-	EPStoLKASBuffer[EPStoLKASBufferCounter++]  = rcvdByte;
-	if(EPStoLKASBufferCounter == 5){
-		outputSerial.print("  ^  ");
-		printArrayInBinary(&EPStoLKASBuffer[0],5);
+	if(EPStoLKASBufferCounter == 4){
+		// outputSerial.print("  ^  ");
+		// printArrayInBinary(&EPStoLKASBuffer[0],5);
 		EPStoLKASBufferCounter = 0;
 		if(sendEPStoLKASRxToCan){
 			canMsg.id = EPStoLKASLinDataRxMsgId;
@@ -411,8 +419,7 @@ void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
 //steering wheel position data from the CAN bus, so the steering torque data might be minimial.
 void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
 	if( (rcvdByte >> 6 )  == 0 ) EPStoLKASBufferCounter = 0;
-	else EPStoLKASBufferCounter++;
-	EPStoLKASBuffer[EPStoLKASBufferCounter] = rcvdByte;
+	
 
 	if(DIP6_passSteeringWheelTorqueData) passEPStoLKASTorqueData(rcvdByte);
 	else if(DIP7_SpoofSteeringWheelTorqueData)spoofSteeringWheelTorqueData(rcvdByte);
@@ -496,41 +503,74 @@ void sendEPStoLKASToCAN(uint8_t *EPSData){ // Sends the 5 byte frame to CAN for 
 //***					OP functions			***
 
 // BO_ 427 STEER_MOTOR_TORQUE: 3 EPS
-//  SG_ MOTOR_TORQUE : 0|9@0+ (1,0) [0|256] "" EON
-//  SG_ OUTPUT_DISABLED_INVERT : 13|1@0+ (1,0) [0|1] "not sure if its invert or some LDW" EON
-//  SG_ UNK_3BIT_1 : 14|1@0+ (1,0) [0|1] "" EON
-//  SG_ OUTPUT_DISABLED : 22|1@0+ (1,0) [0|1] "" EON
+//  SG_ MOTOR_TORQUE : 0|10@0+ (1,0) [-256|256] "" EON
+//  SG_ OUTPUT_DISABLED_INVERT : 15|1@0+ (1,0) [0|1] "not sure if its invert or some LDW" EON
+//  SG_ UNK_3BIT_1 : 10|3@0+ (1,0) [0|7] "" EON
+//  SG_ OUTPUT_DISABLED : 14|1@0+ (1,0) [0|1] "" EON
 //  SG_ COUNTER : 21|2@0+ (1,0) [0|3] "" EON
 //  SG_ CHECKSUM : 19|4@0+ (1,0) [0|15] "" EON
 
+//removed
 // SG_ CONFIG_VALID : 7|1@0+ (1,0) [0|1] "" EON   << not used
 
 void buildSteerMotorTorqueCanMsg(){ //TODO: add to decclaration
-	CAN_message_t msg;
+	CAN_message_t msg; // move this to a global to save the assignment of id and len
 	msg.id = 427;
 	msg.len = 3;
-	msg.buf[0] = EPStoLKASBuffer[0] << 5;  
-	msg.buf[0] |= EPStoLKASBuffer[1] & B00011111;
-	msg.buf[1] = ( EPStoLKASBuffer[0] >>3 ) & B00000001;
-	msg.buf[1] |= EPStoLKASBuffer[1] & B01100000;
-	msg.buf[2] =  EPStoLKASBuffer[3] & B01000000;
+	msg.buf[0] = (EPStoLKASBuffer[2] << 4 ) & B1000000;  //1 LSB bit of bigSteerTorque 
+	msg.buf[0] |= EPStoLKASBuffer[3] & B01111111 ; // all of SmallSteerTorque
+	msg.buf[1] = ( EPStoLKASBuffer[2] >> 4 ) & B00000011; // 2 MSB of bigSteerTorque
+	msg.buf[1] |= ( EPStoLKASBuffer[1] << 2 ) & B10000000;  // this is output_disabled_inverted
+	msg.buf[1] |= ( EPStoLKASBuffer[2] << 2 )& B00011100; //UNK_3bit_1
+	msg.buf[1] |=  EPStoLKASBuffer[2] & B01000000; //output_disabled
+	
+	msg.buf[2] |= honda_compute_checksum(&msg.buf[0],3);
+	FCAN.write(msg);
 }
 
 ///// the only thing in this DBC that should be used is steeor_troque_sensor
-// BO_ 399 STEER_STATUS: 7 EPS
-//  SG_ STEER_TORQUE_SENSOR : 7|16@0- (-1,0) [-31000|31000] "tbd" EON
-//  SG_ STEER_ANGLE_RATE : 23|16@0- (-0.1,0) [-31000|31000] "deg/s" EON << TODO: check if OP uses this or the other STEER_ANGLE_RATE .. this one will not work
+// BO_ 399 STEER_STATUS: 3 EPS
+//  SG_ STEER_TORQUE_SENSOR : 0|9@0- (-1,0) [-256|255] "tbd" EON
+//  SG_ COUNTER : 21|2@0+ (1,0) [0|3] "" EON
+//  SG_ CHECKSUM : 19|4@0+ (1,0) [0|3] "" EON
+
+//removed
 //  SG_ STEER_STATUS : 39|4@0+ (1,0) [0|15] "" EON
 //  SG_ STEER_CONTROL_ACTIVE : 35|1@0+ (1,0) [0|1] "" EON
 //  SG_ STEER_CONFIG_INDEX : 43|4@0+ (1,0) [0|15] "" EON
-//  SG_ COUNTER : 53|2@0+ (1,0) [0|3] "" EON
-//  SG_ CHECKSUM : 51|4@0+ (1,0) [0|3] "" EON
+//  SG_ STEER_ANGLE_RATE : 23|16@0- (-0.1,0) [-31000|31000] "deg/s" EON << TODO: check if OP uses this or the other STEER_ANGLE_RATE .. this one will not work
 
 void buildSteerStatusCanMsg(){ //TODO: add to decclaration
+	CAN_message_t msg; // move this to a global so you dont have to re assign the id and len
+	msg.id = 399;
+	msg.len = 3;
+	msg.buf[0] = EPStoLKASBuffer[0] << 5;   // 3 LSB of BigSteerTorque (4bit)
+	msg.buf[0] |= EPStoLKASBuffer[1] & B00011111; // all of smallSteerTorque
+	msg.buf[1] = ( EPStoLKASBuffer[0] >>3 ) & B00000001; // 1st MSB of bigSteerTorque (4bit)
 
+	msg.buf[2] = (OPCanCounter << 4 ); // put in the counter
+	
+	msg.buf[2] |= honda_compute_checksum(&msg.buf[0],3);
+	FCAN.write(msg);
 }
 
 
+// this function is called from the handleEPStoLKAS() which is called when a byte is received from this LIN bus.  
+// This function builds the 2 CAN messages for MOTOR_TORQUE and STEER_TORQUE (input) from the EPStoLKAS 5 byte frame
+// but only does it after the whole frame is received and checksum'd
+void handleEPStoLKASOP(uint8_t rcvdByte){
+	// use OPCanCounter.
+	if(EPStoLKASBufferCounter != 4) return; //nothing to do 
+	buildSteerMotorTorqueCanMsg();
+	buildSteerStatusCanMsg();
+
+	if(++OPCanCounter > 3) OPCanCounter = 0;
+}
+
+void handleEPStoLKASKeepMcuHappy(uint8_t rcvdByte){
+	// if(EPStoLKASBufferCounter == 0) EPStoLKAS_Serial.write(rcvdByte);
+	EPStoLKAS_Serial.write(eps_off_array[incomingMsg.counterBit][EPStoLKASBufferCounter]);
+}
 
 //when OP port is finally coded, its going to send a steer torque command to the bus, the teensy will see that data and
 //after checking counter and checksum, will take the data and send it on the serial/LIN bus for steering torque application

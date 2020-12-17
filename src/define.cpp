@@ -33,8 +33,8 @@
 #define DIP6_passSteeringWheelTorqueData_PIN 11
 #define DIP7_SpoofSteeringWheelTorqueData_PIN 12
 
-#define sendEPStoLKASRxToCan true
-#define sendLKAStoEPSRxToCan true
+#define sendEPStoLKASRxToCan false
+#define sendLKAStoEPSRxToCan false
 
 #define OUTPUTSERIAL_BAUD 921600
 
