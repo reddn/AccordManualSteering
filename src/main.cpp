@@ -820,7 +820,8 @@ void handleInputReads(){
 		// } else digitalWrite(BLUE_LED,LOW);
 
 		DIP1_spoofFullMCUDigitalRead = digitalRead(DIP1_spoofFullMCU);
-		DIP2_sendOPSteeringTorque = digitalRead(DIP2);
+		// DIP2_sendOPSteeringTorque = digitalRead(DIP2);
+		DIP2_sendOPSteeringTorque = 0; // Forced into OP mode
 		DIP6_passSteeringWheelTorqueData = digitalRead(DIP6_passSteeringWheelTorqueData_PIN);
 		DIP7_SpoofSteeringWheelTorqueData = digitalRead(DIP7_SpoofSteeringWheelTorqueData_PIN);
 
