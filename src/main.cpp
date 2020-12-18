@@ -6,6 +6,7 @@
 
 #define DEBUG_SEND_TO_SERIAL 1
 //define DEBUG_PRINT_LKAStoEPS_OUTPUT 1 
+#define DEBUG_PRINT_EPStoLKAS_TO_SERIAL 1
 
 
 // *****  Global Variables *****
@@ -237,17 +238,32 @@ void handleEPStoLKAS(){
 	if(EPStoLKAS_Serial.available())
 	{
 		uint8_t rcvdByte = EPStoLKAS_Serial.read();
-		if( (rcvdByte >> 7) == 0) {
-			EPStoLKASBufferCounter = 0; // B0000 0000
+		// if( (rcvdByte >> 7) == 0 && (EPStoLKASBufferCounter != 0)) {
+		if( (rcvdByte >> 4) == (incomingMsg.counterBit * 2) && (EPStoLKASBufferCounter != 0)) {
 #ifdef DEBUG_SEND_TO_SERIAL
-			outputSerial.print("\nEPStoLKAS Frame Start   -  ");
+			outputSerial.print("\nEPStoLKAS Was reset out of sequence   -  ");
+			for(uint8_t z = 0; z < EPStoLKASBufferCounter; z++){
+				printuint_t(EPStoLKASBuffer[z]);
+				outputSerial.print("  ");
+			}
+				printuint_t(rcvdByte);
+				outputSerial.print("  -  ");
+				outputSerial.println(EPStoLKASBufferCounter,DEC);
 #endif
+			EPStoLKASBufferCounter = 0; // B0000 0000
 		}
 #ifdef DEBUG_SEND_TO_SERIAL
-	outputSerial.print("  -  ");
-	outputSerial.print(EPStoLKASBufferCounter,DEC);
+	// outputSerial.print("  -  ");
+	// outputSerial.print(EPStoLKASBufferCounter,DEC);
 	// Serial.print("")
 #endif
+
+#ifdef DEBUG_PRINT_EPStoLKAS_TO_SERIAL
+	// outputSerial.print("\n");
+	// printuint_t(rcvdByte);
+	// outputSerial.println();
+
+#endif 
 		
 		EPStoLKASBuffer[EPStoLKASBufferCounter] = rcvdByte;
 
@@ -265,7 +281,7 @@ void handleEPStoLKAS(){
 		if(EPStoLKASBufferCounter > 4) {
 			EPStoLKASBufferCounter = 0;
 #ifdef DEBUG_SEND_TO_SERIAL
-			outputSerial.println("EPStoLKASBufferCounter is set to 0 by line 267");
+			// outputSerial.println("EPStoLKASBufferCounter is set to 0 by line 267");
 #endif
 		}
 	}
@@ -584,14 +600,13 @@ void buildSteerStatusCanMsg(){ //TODO: add to decclaration
 // but only does it after the whole frame is received and checksum'd
 void handleEPStoLKASOP(uint8_t rcvdByte){
 #ifdef DEBUG_SEND_TO_SERIAL
-	outputSerial.print("  -  ");
-	outputSerial.print(EPStoLKASBufferCounter,DEC);
-	// Serial.print("")
+	// outputSerial.print("  -  ");
+	// outputSerial.print(EPStoLKASBufferCounter,DEC);
 #endif
 	// use OPCanCounter.
 	if(EPStoLKASBufferCounter < 4) return; //nothing to do 
 #ifdef DEBUG_SEND_TO_SERIAL
-	outputSerial.println("  -  On Counter 4. calling functions  -");
+	// outputSerial.println("  -  On Counter 4. calling functions  -");
 #endif
 	buildSteerMotorTorqueCanMsg();
 	buildSteerStatusCanMsg();
