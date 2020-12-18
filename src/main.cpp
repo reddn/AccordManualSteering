@@ -232,6 +232,7 @@ void handleEPStoLKAS(){
 	if(EPStoLKAS_Serial.available())
 	{
 		uint8_t rcvdByte = EPStoLKAS_Serial.read();
+		if( (rcvdByte >> 7) == 0) EPStoLKASBufferCounter = 0; // B0000 0000
 		EPStoLKASBuffer[EPStoLKASBufferCounter] = rcvdByte;
 
 
@@ -253,7 +254,7 @@ void handleLKAStoEPS(){
 	if(LKAStoEPS_Serial.available()){
 		uint8_t rcvdByte = LKAStoEPS_Serial.read();
 		deconstructLKASMessage(rcvdByte);
-		if((rcvdByte >> 6) == 0){ //its the first byte
+		if((rcvdByte >> 7) == 0){ //its the first byte
 			EPStoLKASBufferCounter = 0;
 		}
 		if(!DIP2_sendOPSteeringTorque) handleLKAStoEPSUsingOPCan();// DIP 2 On
