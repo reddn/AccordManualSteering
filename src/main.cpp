@@ -4,6 +4,7 @@
 #include <FlexCAN_T4.h>
 #include <globalvars.cpp>
 
+#define DEBUG_SEND_TO_SERIAL 1
 
 // *****  Global Variables *****
 
@@ -53,7 +54,7 @@ uint8_t nextCounterBit = 0;
  
 int8_t LkasOnIntroCountDown = 5; // sends 5 frames of LKAS on and 0 apply steer.. the stock LKAS does this. but I dont think its needed
 
-FlexCAN_T4<CAN1, RX_SIZE_512, TX_SIZE_128> FCAN;
+FlexCAN_T4<CAN3, RX_SIZE_512, TX_SIZE_128> FCAN;
 
 CAN_message_t canMsg;
 
@@ -232,7 +233,13 @@ void handleEPStoLKAS(){
 	if(EPStoLKAS_Serial.available())
 	{
 		uint8_t rcvdByte = EPStoLKAS_Serial.read();
-		if( (rcvdByte >> 7) == 0) EPStoLKASBufferCounter = 0; // B0000 0000
+		if( (rcvdByte >> 7) == 0) {
+			EPStoLKASBufferCounter = 0; // B0000 0000
+#ifdef DEBUG_SEND_TO_SERIAL
+			outputSerial.print("EPStoLKAS Frame Start   -  ");
+#endif
+		}
+		
 		EPStoLKASBuffer[EPStoLKASBufferCounter] = rcvdByte;
 
 
@@ -531,7 +538,7 @@ void buildSteerMotorTorqueCanMsg(){ //TODO: add to decclaration
 
 ///// the only thing in this DBC that should be used is steeor_troque_sensor
 // BO_ 399 STEER_STATUS: 3 EPS
-//  SG_ STEER_TORQUE_SENSOR : 0|9@0- (-1,0) [-256|255] "tbd" EON
+//  SG_ STEER_TORQUE_SENSOR : 0|10@0- (-1,0) [-256|255] "tbd" EON
 //  SG_ COUNTER : 21|2@0+ (1,0) [0|3] "" EON
 //  SG_ CHECKSUM : 19|4@0+ (1,0) [0|3] "" EON
 
@@ -560,8 +567,16 @@ void buildSteerStatusCanMsg(){ //TODO: add to decclaration
 // This function builds the 2 CAN messages for MOTOR_TORQUE and STEER_TORQUE (input) from the EPStoLKAS 5 byte frame
 // but only does it after the whole frame is received and checksum'd
 void handleEPStoLKASOP(uint8_t rcvdByte){
+#ifdef DEBUG_SEND_TO_SERIAL
+	outputSerial.print("  -  ");
+	outputSerial.print(EPStoLKASBufferCounter,DEC);
+	// Serial.print("")
+#endif
 	// use OPCanCounter.
 	if(EPStoLKASBufferCounter != 4) return; //nothing to do 
+#ifdef DEBUG_SEND_TO_SERIAL
+	outputSerial.println("  -  On Counter 4. calling functions  -");
+#endif
 	buildSteerMotorTorqueCanMsg();
 	buildSteerStatusCanMsg();
 
