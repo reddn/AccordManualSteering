@@ -5,6 +5,8 @@
 #include <globalvars.cpp>
 
 #define DEBUG_SEND_TO_SERIAL 1
+//define DEBUG_PRINT_LKAStoEPS_OUTPUT 1 
+
 
 // *****  Global Variables *****
 
@@ -159,9 +161,10 @@ void createKLinMessage(int16_t applySteer){
 	LKAStoEPS_Serial.write(msg[1]);
 	LKAStoEPS_Serial.write(msg[2]);
 	LKAStoEPS_Serial.write(msg[3]);
+#ifdef DEBUG_PRINT_LKAStoEPS_OUTPUT
 	outputSerial.print("\nC-");
-
 	printArrayInBinary(&msg[0],4);
+#endif
 }
 
 // same as above 'createKLinMessage', but this accepts only the bigSteer and littleSteer as variables
@@ -181,9 +184,10 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 	LKAStoEPS_Serial.write(msg[1]);
 	LKAStoEPS_Serial.write(msg[2]);
 	LKAStoEPS_Serial.write(msg[3]);
-
+#ifdef DEBUG_PRINT_LKAStoEPS_OUTPUT
 	outputSerial.print("\nC-");
 	printArrayInBinary(&msg[0],4);
+#endif
 }
 
 
@@ -194,7 +198,7 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 //used to figure out what the LKAStoEPS message contained.. mainly the 'counterbit' is the biggest deal on the first byte
 void  deconstructLKASMessage(uint8_t msg){ //
 	//figure out which message byte your in.. check if first 2 bits are 0's
-	if(((msg >> 6) == 0)){
+	if(((msg >> 7) == 0)){
 		incomingMsg.totalCounter = 0;
 	} else {
 		// outputSerial.write('\n');
@@ -236,9 +240,14 @@ void handleEPStoLKAS(){
 		if( (rcvdByte >> 7) == 0) {
 			EPStoLKASBufferCounter = 0; // B0000 0000
 #ifdef DEBUG_SEND_TO_SERIAL
-			outputSerial.print("EPStoLKAS Frame Start   -  ");
+			outputSerial.print("\nEPStoLKAS Frame Start   -  ");
 #endif
 		}
+#ifdef DEBUG_SEND_TO_SERIAL
+	outputSerial.print("  -  ");
+	outputSerial.print(EPStoLKASBufferCounter,DEC);
+	// Serial.print("")
+#endif
 		
 		EPStoLKASBuffer[EPStoLKASBufferCounter] = rcvdByte;
 
@@ -253,6 +262,12 @@ void handleEPStoLKAS(){
 		else handleEPStoLKASNoSpoof(rcvdByte); // do not spoof.... relay or ???
 
 		EPStoLKASBufferCounter++;
+		if(EPStoLKASBufferCounter > 4) {
+			EPStoLKASBufferCounter = 0;
+#ifdef DEBUG_SEND_TO_SERIAL
+			outputSerial.println("EPStoLKASBufferCounter is set to 0 by line 267");
+#endif
+		}
 	}
 } // handleEPStoLKAS()
 
@@ -385,7 +400,7 @@ void handleEPStoLKASNoSpoof(uint8_t rcvdByte){
 //then its sees if the PB1,PB2,PB4 are press to send those torque request values.  if not. just send a normal
 //LKAS off value depending on the counterbit (so all counter bits are in sync)
 void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
-	if((rcvdByte >> 6) == 0){ //its the first byte
+	if((rcvdByte >> 7) == 0){ //its the first byte
 		incomingMsg.totalCounter = 0;
 		if(!PB1_spoofLKASLeftDigitalRead)  {
 			createKLinMessage(forceLeftApplyTorque);
@@ -574,7 +589,7 @@ void handleEPStoLKASOP(uint8_t rcvdByte){
 	// Serial.print("")
 #endif
 	// use OPCanCounter.
-	if(EPStoLKASBufferCounter != 4) return; //nothing to do 
+	if(EPStoLKASBufferCounter < 4) return; //nothing to do 
 #ifdef DEBUG_SEND_TO_SERIAL
 	outputSerial.println("  -  On Counter 4. calling functions  -");
 #endif
