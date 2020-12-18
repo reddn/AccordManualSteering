@@ -199,7 +199,9 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 //used to figure out what the LKAStoEPS message contained.. mainly the 'counterbit' is the biggest deal on the first byte
 void  deconstructLKASMessage(uint8_t msg){ //
 	//figure out which message byte your in.. check if first 2 bits are 0's
-	if(((msg >> 7) == 0)){
+	// if(((msg >> 7) == 0)){
+	uint8_t offset4 = msg >> 4;
+	if( msg == 0 || msg == 2 ){
 		incomingMsg.totalCounter = 0;
 	} else {
 		// outputSerial.write('\n');
@@ -599,15 +601,10 @@ void buildSteerStatusCanMsg(){ //TODO: add to decclaration
 // This function builds the 2 CAN messages for MOTOR_TORQUE and STEER_TORQUE (input) from the EPStoLKAS 5 byte frame
 // but only does it after the whole frame is received and checksum'd
 void handleEPStoLKASOP(uint8_t rcvdByte){
-#ifdef DEBUG_SEND_TO_SERIAL
-	// outputSerial.print("  -  ");
-	// outputSerial.print(EPStoLKASBufferCounter,DEC);
-#endif
+
 	// use OPCanCounter.
 	if(EPStoLKASBufferCounter < 4) return; //nothing to do 
-#ifdef DEBUG_SEND_TO_SERIAL
-	// outputSerial.println("  -  On Counter 4. calling functions  -");
-#endif
+	//TODO: run checksum on data
 	buildSteerMotorTorqueCanMsg();
 	buildSteerStatusCanMsg();
 
@@ -729,20 +726,23 @@ void handleLkasFromCanV2(){
 void handleLKAStoEPSUsingOPCan(){
 	//TODO: need to check last msg rcvd from can to see if LKAS active should be on... check fatal error.  
 	// if fatal error is set, only send LKAS OFF packets, do not engage
-	if(LkasFromCanFatalError || !(OPLkasActive) ) {
-		sendArrayToLKAStoEPSSerial(&lkas_off_array[incomingMsg.counterBit][0]);
-		return;
-	}
-
-	if(OPLkasActive) {
-		createKLinMessageWBigSteerAndLittleSteer(OPBigSteer,OPLittleSteer);
-	}
-
-	if( (   (millis() - OPTimeLastCANRecieved)   > 100 ) && OPLkasActive ){
-		sendArrayToLKAStoEPSSerial(&lkas_off_array[incomingMsg.counterBit][0]);
+	if( (   (millis() - OPTimeLastCANRecieved)   > 100 ) && OPLkasActive )
+	{
+		// sendArrayToLKAStoEPSSerial(&lkas_off_array[incomingMsg.counterBit][0]);
 		LkasFromCanFatalError = 1;
 		Serial.println("Time ");
 	}
+
+	if(incomingMsg.totalCounter != 0) return;
+	
+	if(OPLkasActive && !LkasFromCanFatalError) 
+	{
+		createKLinMessageWBigSteerAndLittleSteer(OPBigSteer,OPLittleSteer);
+	}else 
+	{
+		sendArrayToLKAStoEPSSerial(&lkas_off_array[incomingMsg.counterBit][0]);
+	}
+	
 	
 }
 
