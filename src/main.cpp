@@ -261,9 +261,9 @@ void handleLKAStoEPS(){
 	if(LKAStoEPS_Serial.available()){
 		uint8_t rcvdByte = LKAStoEPS_Serial.read();
 		deconstructLKASMessage(rcvdByte);
-		if((rcvdByte >> 7) == 0){ //its the first byte
-			EPStoLKASBufferCounter = 0;
-		}
+		// if((rcvdByte >> 7) == 0){ //its the first byte
+		// 	EPStoLKASBufferCounter = 0;
+		// }
 		if(!DIP2_sendOPSteeringTorque) handleLKAStoEPSUsingOPCan();// DIP 2 On
 		else if(!DIP1_spoofFullMCUDigitalRead) handleLKAStoMCUSpoofMCU(rcvdByte); //DIP1 On  -  spoof MCU
 		else if(DIP1_spoofFullMCUDigitalRead) handleLKAStoEPSNoSpoof(rcvdByte); //DIP1 Off -  do not spoof MCU.. relay or modify
@@ -368,7 +368,7 @@ void handleEPStoLKASNoSpoof(uint8_t rcvdByte){
 	if(EPStoLKASBufferCounter == 4){
 		// outputSerial.print("  ^  ");
 		// printArrayInBinary(&EPStoLKASBuffer[0],5);
-		EPStoLKASBufferCounter = 0;
+		// EPStoLKASBufferCounter = 0;
 		if(sendEPStoLKASRxToCan){
 			canMsg.id = EPStoLKASLinDataRxMsgId;
 			canMsg.len = 5;
@@ -426,7 +426,7 @@ void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
 //on the steering wheel, and matching checksums... this isn't good for the safety logic in the MCU, although it does receive
 //steering wheel position data from the CAN bus, so the steering torque data might be minimial.
 void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
-	if( (rcvdByte >> 6 )  == 0 ) EPStoLKASBufferCounter = 0;
+	// if( (rcvdByte >> 7 )  == 0 ) EPStoLKASBufferCounter = 0;
 	
 
 	if(DIP6_passSteeringWheelTorqueData) passEPStoLKASTorqueData(rcvdByte);
@@ -434,11 +434,11 @@ void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
 	else {
 		if( EPStoLKASBufferCounter  == 0 ){ // first byte
 			sendArrayToEPStoLKASSerial(&eps_off_array[incomingMsg.counterBit][0]);
-			EPStoLKASBufferCounter = 0;
+			
 			
 		} else {
 			if(EPStoLKASBufferCounter == 4){
-				EPStoLKASBufferCounter = 0;
+				// EPStoLKASBufferCounter = 0;
 				outputSerial.print("  ^  ");
 				printArrayInBinary(&eps_off_array[incomingMsg.counterBit][0],5);
 			}// end if
@@ -532,6 +532,7 @@ void buildSteerMotorTorqueCanMsg(){ //TODO: add to decclaration
 	msg.buf[1] |= ( EPStoLKASBuffer[2] << 2 )& B00011100; //UNK_3bit_1
 	msg.buf[1] |=  EPStoLKASBuffer[2] & B01000000; //output_disabled
 	
+	msg.buf[2] = (OPCanCounter << 4 ); // put in the counter
 	msg.buf[2] |= honda_compute_checksum(&msg.buf[0],3);
 	FCAN.write(msg);
 }
