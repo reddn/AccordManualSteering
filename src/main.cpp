@@ -4,7 +4,7 @@
 #include <FlexCAN_T4.h>
 #include <globalvars.cpp>
 
-#define DEBUG_SEND_TO_SERIAL 1
+// define DEBUG_SEND_TO_SERIAL 1
 //define DEBUG_PRINT_LKAStoEPS_OUTPUT 1 
 #define DEBUG_PRINT_EPStoLKAS_TO_SERIAL 1
 
@@ -46,6 +46,7 @@ uint8_t EPStoLKASBufferCounter = 0;
 
 uint8_t counterbit = 0;
 uint8_t chksm(uint8_t,uint8_t,uint8_t);
+uint8_t chksm(uint8_t* data, uint8_t len);
 
 uint32_t readLEDblinkLastChange = 0;
 uint8_t LKASFrameSentByCreateLinMessage = 0; // check to show if the current LKAS frame was sent by the CreateLinMessage function, if it was
@@ -201,7 +202,7 @@ void  deconstructLKASMessage(uint8_t msg){ //
 	//figure out which message byte your in.. check if first 2 bits are 0's
 	// if(((msg >> 7) == 0)){
 	uint8_t offset4 = msg >> 4;
-	if( msg == 0 || msg == 2 ){
+	if( offset4 == 0 || offset4 == 2 ){
 		incomingMsg.totalCounter = 0;
 	} else {
 		// outputSerial.write('\n');
@@ -209,9 +210,11 @@ void  deconstructLKASMessage(uint8_t msg){ //
 		incomingMsg.totalCounter++;
 	}
 	if(incomingMsg.totalCounter > 3){ // ERROR!! this shouldnt happen
+#ifdef DEBUG_PRINT_LKAStoEPS_ERRORS_SERIAL
 		outputSerial.print("\nERROR:  incomingMsg.totalCounter is > 3 -- ");
 		outputSerial.print(incomingMsg.totalCounter,DEC);
 		outputSerial.println(" --   impossible ***");
+#endif
 		incomingMsg.totalCounter = 0;
 	}
 	incomingMsg.data[incomingMsg.totalCounter] = msg;
@@ -239,12 +242,15 @@ void  deconstructLKASMessage(uint8_t msg){ //
 void handleEPStoLKAS(){
 	if(EPStoLKAS_Serial.available())
 	{
-		uint8_t rcvdByte = EPStoLKAS_Serial.read();
-		// if( (rcvdByte >> 7) == 0 && (EPStoLKASBufferCounter != 0)) {
-		if( (rcvdByte >> 4) == (incomingMsg.counterBit * 2) && (EPStoLKASBufferCounter != 0)) {
+		uint8_t rcvdByte = EPStoLKAS_Serial.read();	
+
+		uint8_t offset4 = rcvdByte >> 4;
+		if( (offset4 == 2 || offset4 == 0) && (EPStoLKASBufferCounter != 0)) 
+		{
 #ifdef DEBUG_SEND_TO_SERIAL
 			outputSerial.print("\nEPStoLKAS Was reset out of sequence   -  ");
-			for(uint8_t z = 0; z < EPStoLKASBufferCounter; z++){
+			for(uint8_t z = 0; z < EPStoLKASBufferCounter; z++)
+			{
 				printuint_t(EPStoLKASBuffer[z]);
 				outputSerial.print("  ");
 			}
@@ -252,6 +258,7 @@ void handleEPStoLKAS(){
 				outputSerial.print("  -  ");
 				outputSerial.println(EPStoLKASBufferCounter,DEC);
 #endif
+
 			EPStoLKASBufferCounter = 0; // B0000 0000
 		}
 #ifdef DEBUG_SEND_TO_SERIAL
@@ -261,18 +268,34 @@ void handleEPStoLKAS(){
 #endif
 
 #ifdef DEBUG_PRINT_EPStoLKAS_TO_SERIAL
-	// outputSerial.print("\n");
-	// printuint_t(rcvdByte);
+	if(EPStoLKASBufferCounter == 0) outputSerial.print("\n");
+	else outputSerial.print(" ");
+	printuint_t(rcvdByte);
 	// outputSerial.println();
 
 #endif 
-		
+	// if its the 5th byte (index 4).. check checksum,, if its bad.. return
+	if(EPStoLKASBufferCounter == 4){
+		uint8_t thisChksm = chksm(&EPStoLKASBuffer[0],4);
+		if(thisChksm != rcvdByte){
+#ifdef DEBUG_PRINT_EPStoLKAS_TO_SERIAL
+			outputSerial.print(" Bad Chksm ");
+			printuint_t(thisChksm);
+			outputSerial.print("  **  ");
+			printuint_t(rcvdByte);
+#endif 	
+			EPStoLKASBufferCounter = 0;
+			return;
+		}
+	}
+
+
 		EPStoLKASBuffer[EPStoLKASBufferCounter] = rcvdByte;
 
 
 		if(!DIP2_sendOPSteeringTorque) {
 			handleEPStoLKASOP(rcvdByte);
-			handleEPStoLKASKeepMcuHappy(rcvdByte);
+			//handleEPStoLKASKeepMcuHappy(rcvdByte);
 		}	
 		else if(!DIP1_spoofFullMCUDigitalRead) {
 			handleEPStoLKASSpoofMCU(rcvdByte);  //spoof MCU
@@ -734,13 +757,13 @@ void handleLKAStoEPSUsingOPCan(){
 	}
 
 	if(incomingMsg.totalCounter != 0) return;
-	
+
 	if(OPLkasActive && !LkasFromCanFatalError) 
 	{
 		createKLinMessageWBigSteerAndLittleSteer(OPBigSteer,OPLittleSteer);
 	}else 
 	{
-		sendArrayToLKAStoEPSSerial(&lkas_off_array[incomingMsg.counterBit][0]);
+		//sendArrayToLKAStoEPSSerial(&lkas_off_array[incomingMsg.counterBit][0]);
 	}
 	
 	
@@ -789,19 +812,35 @@ void spoofSteeringWheelTorqueData(uint8_t rcvdByte){
 
 // creates the checksum for the LKAStoEPS message (its 3 bytes + 1 checksum for the frame)
 uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte){
-	uint16_t local = firstByte + secondByte + thirdByte ;
-	local = local % 512;
-	local = 512 - local;
-	return (uint8_t)(local % 256);
+	uint8_t tot = firstByte + secondByte + thirdByte ;
+	tot = 256- tot;
+    tot %= 128;
+    tot += 128;
+	return tot;
 }
 
 // creates checksum of the EPStoLKAS frame, 4 bytes + 1 checksum byte... overloaded
 uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte, uint8_t fourthByte){
-	uint16_t local = firstByte + secondByte + thirdByte + fourthByte;
-	local = local % 512;
-	local = 512 - local;
-	return (uint8_t)(local % 256);
+	uint8_t tot = firstByte + secondByte + thirdByte + fourthByte;
+	tot = 256- tot;
+    tot %= 128;
+    tot += 128;
+	return tot;
 }
+
+uint8_t chksm(uint8_t* data, uint8_t len){
+	uint8_t tot = 0;
+	for(uint8_t zz =0; zz < len; zz ++) 
+	{
+		tot += *(data+zz);
+	}
+    tot = 256- tot;
+    tot %= 128;
+    tot += 128;
+	return tot;
+}
+
+
 
 //code mostly taken from safety_honda.h  Credit Comma.ai MIT license on this function only
 uint8_t honda_compute_checksum(uint8_t *steerTorqueAndMotorTorque, uint8_t len) {
