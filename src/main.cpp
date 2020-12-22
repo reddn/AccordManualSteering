@@ -66,7 +66,7 @@ uint8_t nextCounterBit = 0;
  
 int8_t LkasOnIntroCountDown = 5; // sends 5 frames of LKAS on and 0 apply steer.. the stock LKAS does this. but I dont think its needed
 
-FlexCAN_T4<CAN3, RX_SIZE_512, TX_SIZE_128> FCAN;
+FlexCAN_T4<CAN1, RX_SIZE_512, TX_SIZE_128> FCAN;
 
 CAN_message_t canMsg;
 
@@ -203,8 +203,9 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 		LKAStoEPS_Serial.write(msg[2]);
 		LKAStoEPS_Serial.write(msg[3]);
 	}
-#ifdef DEBUG_PRINT_LKAStoEPS_OUTPUT
-	outputSerial.print("\nC-");
+#ifdef DEBUG_PRINT_LKAStoEPS_LIN_OUTPUT
+	outputSerial.print("\nL-O:");
+	
 	printArrayInBinary(&msg[0],4);
 #endif
 }
@@ -595,6 +596,7 @@ void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
 		//  						  |Motor Steer Torque9 |
 		//						  	   3 bits 3rd byte offset 0-2 |   |
 		//																Counter     Checksum
+
 		uint8_t steerTorqueAndMotorTorque[4] = {0,0,0,0};
 		// uint8_t tempData = 0;
 		steerTorqueAndMotorTorque[0] = EPStoLKASBuffer[0] << 5;
@@ -764,6 +766,7 @@ void sendEPStoLKASToCAN(uint8_t *EPSData){ // Sends the 5 byte frame to CAN for 
 // SG_ CONFIG_VALID : 7|1@0+ (1,0) [0|1] "" EON   << not used
 
 void buildSteerMotorTorqueCanMsg(){ //TODO: add to decclaration
+	outputSerial.print("\nSendingSteer TOrque Can MSg");
 	CAN_message_t msg; // move this to a global to save the assignment of id and len
 	msg.id = 427;
 	msg.len = 3;
@@ -792,6 +795,7 @@ void buildSteerMotorTorqueCanMsg(){ //TODO: add to decclaration
 //  SG_ STEER_ANGLE_RATE : 23|16@0- (-0.1,0) [-31000|31000] "deg/s" EON << TODO: check if OP uses this or the other STEER_ANGLE_RATE .. this one will not work
 
 void buildSteerStatusCanMsg(){ //TODO: add to decclaration
+	outputSerial.print("\nsending Steer Status Cna MSg");
 	CAN_message_t msg; // move this to a global so you dont have to re assign the id and len
 	msg.id = 399;
 	msg.len = 3;
