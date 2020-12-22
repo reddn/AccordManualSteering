@@ -10,6 +10,9 @@
 // #define DEBUG_PRINT_LKAStoEPS_ERRORS_SERIAL 0
 #define DEBUG_PRINT_LKAStoEPS_LIN_INPUT 1
 #define DEBUG_PRINT_LKAStoEPS_LIN_OUTPUT 1
+#define DEBUG_PRINT_EPStoLKAS_LIN_OUTPUT 1
+#define DEBUG_PRINT_EPStoLKAS_LIN_INPUT 1
+#define DEBUG_PRINT_EPStoLKAS_ERRORS 1
 
 
 // *****  Global Variables *****
@@ -129,7 +132,7 @@ void buildSteerStatusCanMsg();
 uint8_t honda_compute_checksum(uint8_t *steerTorqueAndMotorTorque, uint8_t size); // << From Comma.ai Panda safety_honda.h licensed unde MIT
 
 
-// 																				*****	FUNCTIONS ***** 
+// 	*	*	*	*	*	*	*	*	******	FUNCTIONS ***** 
 
 
 //This function takes the signed int to make it into a valid LKAStoEPS message for steering.  
@@ -223,7 +226,7 @@ void  deconstructLKASMessage(uint8_t msg){ //
 #ifdef DEBUG_PRINT_LKAStoEPS_ERRORS_SERIAL
 		outputSerial.print("\nERROR:  incomingMsg.totalCounter is > 3 -- ");
 		outputSerial.print(incomingMsg.totalCounter,DEC);
-		outputSerial.println(" --   impossible ***");
+		outputSerial.println(" --   impossible  . resetting to 0 *** ");
 #endif
 		incomingMsg.totalCounter = 0;
 	}
@@ -249,7 +252,7 @@ void  deconstructLKASMessage(uint8_t msg){ //
 
 
 
-// ********** Handle  LKAS  to  EPS
+// *	*	*	*	*	*	*	*	*	********** Handle  LKAS  to  EPS
 
 //main loop function to check if any data was received on the stock LKAStoEPS line, then handle it spending on spoof settings 
 void handleLKAStoEPS(){
@@ -261,16 +264,16 @@ void handleLKAStoEPS(){
 		else if(!DIP1_spoofFullMCUDigitalRead) handleLKAStoMCUSpoofMCU(rcvdByte); //DIP1 On  -  spoof MCU
 		else if(DIP1_spoofFullMCUDigitalRead) handleLKAStoEPSNoSpoof(rcvdByte); //DIP1 Off -  do not spoof MCU.. relay or modify
 #ifdef DEBUG_PRINT_LKAStoEPS_LIN_INPUT
-		// outputSerial.write(rcvdByte);
 		outputSerial.print("\nL-I:");
+		outputSerial.print(incomingMsg.totalCounter,DEC);
+		outputSerial.print("-");
 		printuint_t(rcvdByte);
-
 #endif
 	} 
 
 } // handleLKAStoEPS()
 
-//if we are only forwarding the LKAStoEPS line, this is call.. ie, no spoofing.
+//if we are only forwarding the LKAStoEPS line, this is called.. ie, no spoofing.
 //sends the data to the CAN bus if sendLKAStoEPSRxToCan is true, thsi is for OP to capture for later review
 //although this function does print the data.. which probably should be bought out to its own function
 void handleLKAStoEPSNoSpoof(uint8_t rcvdByte){
@@ -363,10 +366,12 @@ void handleLKAStoEPSUsingOPCan(){
 	{
 		// sendArrayToLKAStoEPSSerial(&lkas_off_array[incomingMsg.counterBit][0]);
 		LkasFromCanFatalError = 1;
-		outputSerial.println("Time ");
+		outputSerial.println("Timeout.  more than 100 ms since last CAN message and LKAS is on ");
 	}
-	
+
+	//we only sendmessages on totalCounter == 0. so if its not 0, keep going
 	if(incomingMsg.totalCounter != 0) return;
+	//outputSerial.println("totalCounter is 0"); //test2
 
 	if(OPLkasActive && !LkasFromCanFatalError) 
 	{
@@ -378,16 +383,20 @@ void handleLKAStoEPSUsingOPCan(){
 	}	
 } // end handleLKAStoEPSUsingOPCan();
 
+
 //the name says it all... 
 void sendArrayToLKAStoEPSSerial(uint8_t *array){
-	if(DIP5_disableAllLinOutput) return;
+	if(!DIP5_disableAllLinOutput)
+	{
 	LKAStoEPS_Serial.write(*array);
 	LKAStoEPS_Serial.write(*(array+1));
 	LKAStoEPS_Serial.write(*(array+2));
 	LKAStoEPS_Serial.write(*(array+3));
+	}
+	outputSerial.print("\nsendArrayToLKAStoEPSSerial ");
 	// if(arraySize == 5) serial.write(*(array+4));
-#ifdef DEBUG_PRINT_LKAStoEPS_LIN_OUTPUT
-	outputSerial.print("\nE-O:");
+	#ifdef DEBUG_PRINT_LKAStoEPS_LIN_OUTPUT
+	outputSerial.print("\nL-O:");
 	printuint_t(*array);
 	outputSerial.print("  ");
 	printuint_t(*(array+1));
@@ -396,10 +405,10 @@ void sendArrayToLKAStoEPSSerial(uint8_t *array){
 	outputSerial.print("  ");
 	printuint_t(*(array+3));
 	outputSerial.print("  ");
-#endif
+	#endif
 }
 
-// ******* EPS  to   LKAS
+// *	*	*	*	*	*	*	*	*	******* EPS  to   LKAS
 
 void handleEPStoLKAS(){
 	if(EPStoLKAS_Serial.available())
@@ -409,9 +418,9 @@ void handleEPStoLKAS(){
 		uint8_t offset4 = rcvdByte >> 4;
 		if( (offset4 < 4 )) 
 		{
-			if(EPStoLKASBufferCounter != 4)
+			if(EPStoLKASBufferCounter != 0)
 			{
-#ifdef DEBUG_SEND_TO_SERIAL
+#ifdef DEBUG_PRINT_EPStoLKAS_ERRORS
 			outputSerial.print("\nEPStoLKAS Was reset out of sequence   -  ");
 			for(uint8_t z = 0; z < EPStoLKASBufferCounter; z++)
 			{
@@ -432,9 +441,10 @@ void handleEPStoLKAS(){
 	// Serial.print("")
 #endif
 
-#ifdef DEBUG_PRINT_EPStoLKAS_TO_SERIAL
-	if(EPStoLKASBufferCounter == 0) outputSerial.print("\n");
-	else outputSerial.print(" ");
+#ifdef DEBUG_PRINT_EPStoLKAS_LIN_INPUT
+	outputSerial.print("\nE-I-");
+	outputSerial.print(EPStoLKASBufferCounter,DEC);
+	outputSerial.print(":");
 	printuint_t(rcvdByte);
 	// outputSerial.println();
 
@@ -443,7 +453,7 @@ void handleEPStoLKAS(){
 		if(EPStoLKASBufferCounter == 4){
 			uint8_t thisChksm = chksm(&EPStoLKASBuffer[0],4);
 			if(thisChksm != rcvdByte){
-#ifdef DEBUG_PRINT_EPStoLKAS_TO_SERIAL
+#ifdef DEBUG_PRINT_EPStoLKAS_ERRORS
 			outputSerial.print(" Bad Chksm ");
 			printuint_t(thisChksm);
 			outputSerial.print("  **  ");
@@ -496,8 +506,17 @@ void handleEPStoLKASOP(uint8_t rcvdByte){
 
 void handleEPStoLKASKeepMcuHappy(uint8_t rcvdByte){
 	// if(EPStoLKASBufferCounter == 0) EPStoLKAS_Serial.write(rcvdByte);
-	if(DIP5_disableAllLinOutput) return;
-	if(EPStoLKASBufferCounter == 0) sendArrayToEPStoLKASSerial(&eps_off_array[incomingMsg.counterBit][0]);
+	if(EPStoLKASBufferCounter == 0){
+		if(!DIP5_disableAllLinOutput) {
+			sendArrayToEPStoLKASSerial(&eps_off_array[incomingMsg.counterBit][0]);
+
+		}
+		#ifdef DEBUG_PRINT_EPStoLKAS_LIN_OUTPUT
+		outputSerial.print("\nE-O:");
+		printArrayInBinary(&eps_off_array[incomingMsg.counterBit][0],5);
+		outputSerial.print("  ");
+		#endif
+	}
 	// EPStoLKAS_Serial.write(eps_off_array[incomingMsg.counterBit][EPStoLKASBufferCounter]);
 }
 
@@ -526,7 +545,7 @@ void handleEPStoLKASNoSpoof(uint8_t rcvdByte){
 
 //the name says it all. requites 5 byte array pointer
 void sendArrayToEPStoLKASSerial(uint8_t *array){
-	if(DIP5_disableAllLinOutput) return; 
+	
 	EPStoLKAS_Serial.write(*array);
 	EPStoLKAS_Serial.write(*(array+1));
 	EPStoLKAS_Serial.write(*(array+2));
@@ -599,7 +618,7 @@ void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
 
 
 
-// *********  Printing   Functions
+// *	*	*	*	*	*	*	*	*	*	*	*	*********  Printing   Functions
 
 //prints the binary representation of a uint8_t (byte/char).  it also adds a space at between the two 4 bit segments, easier to read
 //the naming is pretty bad, but need to change it. 
@@ -696,7 +715,8 @@ void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
 
 
 
-// message is actually 5, but im going to break out the steer values
+
+
 
 //sends a 5 byte array by pointer to the CANbus using the messageID set in define.cpp... 
 void sendEPStoLKASToCAN(uint8_t *EPSData){ // Sends the 5 byte frame to CAN for tracking in cabana
@@ -724,7 +744,13 @@ void sendEPStoLKASToCAN(uint8_t *EPSData){ // Sends the 5 byte frame to CAN for 
 	FCAN.write(msg);
 }
 
-//***					OP functions			***
+
+
+
+
+
+
+//*	*	*	*	*	*	*	*	*	*	*	*	***					OP functions			***
 
 // BO_ 427 STEER_MOTOR_TORQUE: 3 EPS
 //  SG_ MOTOR_TORQUE : 0|10@0+ (1,0) [-256|256] "" EON
@@ -869,7 +895,10 @@ void spoofSteeringWheelTorqueData(uint8_t rcvdByte){
 
 }
 
-// ***					CHECKSUM FUNCTIONS
+
+
+
+// *	*	*	*	*	*	*	*	*	***					CHECKSUM FUNCTIONS
 
 // creates the checksum for the LKAStoEPS message (its 3 bytes + 1 checksum for the frame)
 uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte){
