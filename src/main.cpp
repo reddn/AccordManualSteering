@@ -501,7 +501,7 @@ void sendArrayToLKAStoEPSSerial(uint8_t *array){
 	printuint_t(*(array+3));
 	outputSerial.print("  ");
 	#endif
-		CAN_message_t thisCanMsg;
+	CAN_message_t thisCanMsg;
 	thisCanMsg.id = 0x200;
 	thisCanMsg.len = 4;
 	thisCanMsg.buf[0] = *array;
@@ -671,9 +671,7 @@ void sendArrayToEPStoLKASSerial(uint8_t *array){
 //on the steering wheel, and matching checksums... this isn't good for the safety logic in the MCU, although it does receive
 //steering wheel position data from the CAN bus, so the steering torque data might be minimial.
 void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
-	// if( (rcvdByte >> 7 )  == 0 ) EPStoLKASBufferCounter = 0;
 	
-
 	if(DIP6_passSteeringWheelTorqueData) passEPStoLKASTorqueData(rcvdByte);
 	else if(DIP7_SpoofSteeringWheelTorqueData)spoofSteeringWheelTorqueData(rcvdByte);
 	else {
@@ -1115,7 +1113,7 @@ void handleInputReads(){
 		lastDigitalReadTime = millis();
 
 		
-		digitalWrite(BLUE_LED,( EPStoLKASBuffer[2] >> 2 ) && B00000001);
+		digitalWrite(BLUE_LED,( EPStoLKASBuffer[2] >> 2 ) & B00000001);
 		
 	} // end if true
 }
