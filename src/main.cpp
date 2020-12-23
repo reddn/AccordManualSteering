@@ -10,10 +10,10 @@
 // #define DEBUG_PRINT_LKAStoEPS_ERRORS_SERIAL 0
 // #define DEBUG_PRINT_LKAStoEPS_LIN_INPUT 1
 #define DEBUG_PRINT_LKAStoEPS_LIN_OUTPUT 1
-#define DEBUG_PRINT_EPStoLKAS_LIN_OUTPUT 1
+// #define DEBUG_PRINT_EPStoLKAS_LIN_OUTPUT 1
 // #define DEBUG_PRINT_EPStoLKAS_LIN_INPUT 1
 #define DEBUG_PRINT_EPStoLKAS_ERRORS 1
-#define DEBUG_PRINT_OPtoCAN_INPUT 1
+// #define DEBUG_PRINT_OPtoCAN_INPUT 1
 
 
 // *****  Global Variables *****
@@ -213,6 +213,14 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 	outputSerial.print("\nL-O:");
 	printArrayInBinary(&msg[0],4);
 #endif
+	CAN_message_t thisCanMsg;
+	thisCanMsg.id = 200;
+	thisCanMsg.len = 4;
+	thisCanMsg.buf[0] = msg[0];
+	thisCanMsg.buf[1] = msg[1];
+	thisCanMsg.buf[2] = msg[2];
+	thisCanMsg.buf[3] = msg[3];
+	FCAN.write(thisCanMsg);
 }
 
 
@@ -462,8 +470,6 @@ void handleLKAStoEPSUsingOPCan(){
 		LkasFromCanFatalError = 1;
 		outputSerial.println("Timeout.  more than 100 ms since last CAN message and LKAS is on ");
 	}
-
-	//outputSerial.println("totalCounter is 0"); //test2
 
 	if(OPLkasActive && !LkasFromCanFatalError) 
 	{
@@ -856,7 +862,7 @@ void sendEPStoLKASToCAN(uint8_t *EPSData){ // Sends the 5 byte frame to CAN for 
 // SG_ CONFIG_VALID : 7|1@0+ (1,0) [0|1] "" EON   << not used
 
 void buildSteerMotorTorqueCanMsg(){ //TODO: add to decclaration
-	outputSerial.print("\nSendingSteer TOrque Can MSg");
+	//outputSerial.print("\nSendingSteer TOrque Can MSg");
 	CAN_message_t msg; // move this to a global to save the assignment of id and len
 	msg.id = 427;
 	msg.len = 3;
@@ -885,7 +891,8 @@ void buildSteerMotorTorqueCanMsg(){ //TODO: add to decclaration
 //  SG_ STEER_ANGLE_RATE : 23|16@0- (-0.1,0) [-31000|31000] "deg/s" EON << TODO: check if OP uses this or the other STEER_ANGLE_RATE .. this one will not work
 
 void buildSteerStatusCanMsg(){ //TODO: add to decclaration
-	outputSerial.print("\nsending Steer Status Cna MSg");
+	
+	// outputSerial.print("\nsending Steer Status Cna MSg");
 	CAN_message_t msg; // move this to a global so you dont have to re assign the id and len
 	msg.id = 399;
 	msg.len = 3;
