@@ -43,6 +43,8 @@ int16_t forceLeftApplyTorque = -30;
 int16_t forceRightApplyTorque = 40;
 int16_t forceApplyTorqueWithPOT = 0;
 
+
+// Some DIP switches are hard coded to be on/off.. please check the readDigitalInputs function to see there.
 uint8_t DIP1_spoofFullMCUDigitalRead = 1;
 uint8_t DIP2_sendOPSteeringTorque = 1;
 uint8_t DIP5_disableAllLinOutput = 1;
@@ -980,14 +982,16 @@ void handleInputReads(){
 		DIP1_spoofFullMCUDigitalRead = digitalRead(DIP1_spoofFullMCU);
 		// DIP2_sendOPSteeringTorque = digitalRead(DIP2);
 		DIP2_sendOPSteeringTorque = 0; // Forced into OP mode
+		// DIP5_disableAllLinOutput = digitalRead(DIP5);
+		DIP5_disableAllLinOutput = 0;
 		DIP6_passSteeringWheelTorqueData = digitalRead(DIP6_passSteeringWheelTorqueData_PIN);
 		DIP7_SpoofSteeringWheelTorqueData = digitalRead(DIP7_SpoofSteeringWheelTorqueData_PIN);
-
-		A1_applySteeringPot = analogRead(A1_applySteeringPotPin);
+		
+		//commented out as this is not needed now. but can be easily re enabled for manual control fun
+		// A1_applySteeringPot = analogRead(A1_applySteeringPotPin);
 		
 		forceApplyTorqueWithPOT = (A1_applySteeringPot - 474) / 1.78;
 
-		DIP5_disableAllLinOutput = digitalRead(DIP5);
 		
 		// outputSerial.print(A1_applySteeringPot,DEC);
 		// outputSerial.print("  -  ");
