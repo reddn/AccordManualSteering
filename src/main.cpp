@@ -13,6 +13,7 @@
 #define DEBUG_PRINT_EPStoLKAS_LIN_OUTPUT 1
 #define DEBUG_PRINT_EPStoLKAS_LIN_INPUT 1
 #define DEBUG_PRINT_EPStoLKAS_ERRORS 1
+#define DEBUG_PRINT_OPtoCAN_INPUT 1
 
 
 // *****  Global Variables *****
@@ -309,6 +310,15 @@ void handleLkasFromCanV2(){
 	// B B B S  S S S S
 	// 0 0 0 0  0 0 R B
 	// 0 0 C C  H H H H
+	if(canMsg.id != 228) return;
+#ifdef DEBUG_PRINT_OPtoCAN_INPUT
+	outputSerial.print("\nCANmsg rcvd id: ");
+	outputSerial.print(canMsg.id,DEC);
+	outputSerial.print(":");
+	for(uint8_t bb = 0; bb < canMsg.len; bb++){
+		printuint_t(canMsg.buf[bb]);
+	}
+#endif 
 
 	if((canMsg.buf[1]>> 1) == 1 ){ // if STEER REQUEST (aka LKAS enabled)
 		OPLkasActive = true;
