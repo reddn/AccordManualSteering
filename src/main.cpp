@@ -1101,8 +1101,7 @@ void handleInputReads(){
 		if( (millis() - OPTimeLastCANRecieved) < 1000 ) mainLedBlinkTimer = 500;
 		else mainLedBlinkTimer = 2000; 
 		// digitalWrite(BLUE_LED,!DIP2_sendOPSteeringTorque);
-		if(DIP2_sendOPSteeringTorque) digitalWrite(BLUE_LED,LOW);
-		else digitalWrite(BLUE_LED,HIGH);
+		
 		lastDigitalReadTime = millis();
 
 		
