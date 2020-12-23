@@ -503,6 +503,14 @@ void sendArrayToLKAStoEPSSerial(uint8_t *array){
 	printuint_t(*(array+3));
 	outputSerial.print("  ");
 	#endif
+		CAN_message_t thisCanMsg;
+	thisCanMsg.id = 0x200;
+	thisCanMsg.len = 4;
+	thisCanMsg.buf[0] = *array;
+	thisCanMsg.buf[1] = *(array+2);
+	thisCanMsg.buf[2] = *(array+3);
+	thisCanMsg.buf[3] = *(array+4);
+	FCAN.write(thisCanMsg);
 }
 
 // *	*	*	*	*	*	*	*	*	******* EPS  to   LKAS
