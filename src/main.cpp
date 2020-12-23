@@ -1107,7 +1107,7 @@ void handleInputReads(){
 
 		
 		digitalWrite(BLUE_LED,( EPStoLKASBuffer[2] >> 2 ) && B00000001);
-		}
+		
 	} // end if true
 }
 
