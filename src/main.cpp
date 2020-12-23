@@ -208,10 +208,12 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 		LKAStoEPS_Serial.write(msg[1]);
 		LKAStoEPS_Serial.write(msg[2]);
 		LKAStoEPS_Serial.write(msg[3]);
+#ifdef DEBUG_PRINT_LKAStoEPS_LIN_OUTPUT
+		outputSerial.print("\nDisabled - next line");
+#endif
 	}
 #ifdef DEBUG_PRINT_LKAStoEPS_LIN_OUTPUT
 	outputSerial.print("\nL-O:");
-	
 	printArrayInBinary(&msg[0],4);
 #endif
 }
@@ -403,7 +405,7 @@ void handleLkasFromCanV3(){
 	uint8_t lclLittleSteer = 0;
 	
 	lclBigSteer = ( canMsg.buf[0] >> 4 ) & B00001000;
-	lclBigSteer |= ( canMsg.buf[1] >> 4 ) & B00000111;
+	lclBigSteer |= ( canMsg.buf[1] >> 5 ) & B00000111;
 	
 
 
@@ -447,13 +449,15 @@ void handleLkasFromCanV3(){
 		OPLkasActive = false;
 		// TODO: send/set/notify something to show there was an error... 
 	}
+
 	OPTimeLastCANRecieved = millis();
-
-
 }
 
 void handleLKAStoEPSUsingOPCan(){
 	//TODO: need to check last msg rcvd from can to see if LKAS active should be on... check fatal error.  
+	//we only sendmessages on totalCounter == 0. so if its not 0, keep going
+	if(incomingMsg.totalCounter != 0) return;
+
 	// if fatal error is set, only send LKAS OFF packets, do not engage
 	if( (   (millis() - OPTimeLastCANRecieved)   > 100 ) && OPLkasActive )
 	{
@@ -462,8 +466,6 @@ void handleLKAStoEPSUsingOPCan(){
 		outputSerial.println("Timeout.  more than 100 ms since last CAN message and LKAS is on ");
 	}
 
-	//we only sendmessages on totalCounter == 0. so if its not 0, keep going
-	if(incomingMsg.totalCounter != 0) return;
 	//outputSerial.println("totalCounter is 0"); //test2
 
 	if(OPLkasActive && !LkasFromCanFatalError) 
@@ -896,6 +898,10 @@ void buildSteerStatusCanMsg(){ //TODO: add to decclaration
 	msg.buf[1] = ( EPStoLKASBuffer[0] >>3 ) & B00000001; // 1st MSB of bigSteerTorque (4bit)
 
 	msg.buf[2] = (OPCanCounter << 4 ); // put in the counter
+
+	//add other data from Teensy so OP can record it
+	msg.buf[1] |= OPLkasActive << 7;
+	msg.buf[1] |= LkasFromCanFatalError << 6;
 	
 	msg.buf[2] |= honda_compute_checksum(&msg.buf[0],3);
 	FCAN.write(msg);
