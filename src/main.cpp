@@ -490,8 +490,6 @@ void sendArrayToLKAStoEPSSerial(uint8_t *array){
 	LKAStoEPS_Serial.write(*(array+2));
 	LKAStoEPS_Serial.write(*(array+3));
 	
-	// if(arraySize == 5) serial.write(*(array+4));
-	//outputSerial.print("\nsendArrayToLKAStoEPSSerial ");
 	#ifdef DEBUG_PRINT_LKAStoEPS_LIN_OUTPUT
 	outputSerial.print("\nL-O:");
 	printuint_t(*array);
@@ -507,11 +505,15 @@ void sendArrayToLKAStoEPSSerial(uint8_t *array){
 	thisCanMsg.id = 0x200;
 	thisCanMsg.len = 4;
 	thisCanMsg.buf[0] = *array;
-	thisCanMsg.buf[1] = *(array+2);
-	thisCanMsg.buf[2] = *(array+3);
-	thisCanMsg.buf[3] = *(array+4);
+	thisCanMsg.buf[1] = *(array+1);
+	thisCanMsg.buf[2] = *(array+2);
+	thisCanMsg.buf[3] = *(array+3);
 	FCAN.write(thisCanMsg);
 }
+
+
+
+
 
 // *	*	*	*	*	*	*	*	*	******* EPS  to   LKAS
 
