@@ -178,12 +178,12 @@ void createKLinMessage(int16_t applySteer){
 	
 	msg[3] = chksm(msg[0], msg[1], msg[2]);
 
-	if(!DIP5_disableAllLinOutput){
+	
 		LKAStoEPS_Serial.write(msg[0]);
 		LKAStoEPS_Serial.write(msg[1]);
 		LKAStoEPS_Serial.write(msg[2]);
 		LKAStoEPS_Serial.write(msg[3]);
-	}
+	
 #ifdef DEBUG_PRINT_LKAStoEPS_OUTPUT
 	outputSerial.print("\nC-");
 	printArrayInBinary(&msg[0],4);
@@ -203,15 +203,12 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 	//										 ^ lkas on (1 is off)
 	msg[3] = chksm(msg[0], msg[1], msg[2]);
 
-	if(!DIP5_disableAllLinOutput){
+
 		LKAStoEPS_Serial.write(msg[0]);
 		LKAStoEPS_Serial.write(msg[1]);
 		LKAStoEPS_Serial.write(msg[2]);
 		LKAStoEPS_Serial.write(msg[3]);
-#ifdef DEBUG_PRINT_LKAStoEPS_LIN_OUTPUT
-		outputSerial.print("\nDisabled - next line");
-#endif
-	}
+
 #ifdef DEBUG_PRINT_LKAStoEPS_LIN_OUTPUT
 	outputSerial.print("\nL-O:");
 	printArrayInBinary(&msg[0],4);
@@ -287,7 +284,7 @@ void handleLKAStoEPS(){
 //although this function does print the data.. which probably should be bought out to its own function
 void handleLKAStoEPSNoSpoof(uint8_t rcvdByte){
 	
-	if(!DIP5_disableAllLinOutput) LKAStoEPS_Serial.write(rcvdByte);
+	LKAStoEPS_Serial.write(rcvdByte);
 #ifdef DEBUG_PRINT_LKAStoEPS_ERRORS
 	if(incomingMsg.totalCounter == 0) outputSerial.print("\nR-");
 	printuint_t(rcvdByte);
@@ -481,13 +478,12 @@ void handleLKAStoEPSUsingOPCan(){
 
 //the name says it all... 
 void sendArrayToLKAStoEPSSerial(uint8_t *array){
-	if(!DIP5_disableAllLinOutput)
-	{
+
 	LKAStoEPS_Serial.write(*array);
 	LKAStoEPS_Serial.write(*(array+1));
 	LKAStoEPS_Serial.write(*(array+2));
 	LKAStoEPS_Serial.write(*(array+3));
-	}
+	
 	outputSerial.print("\nsendArrayToLKAStoEPSSerial ");
 	// if(arraySize == 5) serial.write(*(array+4));
 	#ifdef DEBUG_PRINT_LKAStoEPS_LIN_OUTPUT
@@ -602,10 +598,10 @@ void handleEPStoLKASOP(uint8_t rcvdByte){
 void handleEPStoLKASKeepMcuHappy(uint8_t rcvdByte){
 	// if(EPStoLKASBufferCounter == 0) EPStoLKAS_Serial.write(rcvdByte);
 	if(EPStoLKASBufferCounter == 0){
-		if(!DIP5_disableAllLinOutput) {
+		
 			sendArrayToEPStoLKASSerial(&eps_off_array[incomingMsg.counterBit][0]);
 
-		}
+		
 		#ifdef DEBUG_PRINT_EPStoLKAS_LIN_OUTPUT
 		outputSerial.print("\nE-O:");
 		printArrayInBinary(&eps_off_array[incomingMsg.counterBit][0],5);
@@ -621,7 +617,7 @@ void handleEPStoLKASKeepMcuHappy(uint8_t rcvdByte){
 // and sends it to the CAN bus for OP (if enabled) when its at the end of the frame
 void handleEPStoLKASNoSpoof(uint8_t rcvdByte){
 	
-	if(!DIP5_disableAllLinOutput) EPStoLKAS_Serial.write(rcvdByte);
+	EPStoLKAS_Serial.write(rcvdByte);
 	if(EPStoLKASBufferCounter == 4){
 		// outputSerial.print("  ^  ");
 		// printArrayInBinary(&EPStoLKASBuffer[0],5);
@@ -962,7 +958,7 @@ void handleLKASFromCan(const CAN_message_t &msg){
 void passEPStoLKASTorqueData(uint8_t rcvdByte){
 	switch(EPStoLKASBufferCounter){
 		case 0: // first byte received on EPStoLKAS 
-			if(!DIP5_disableAllLinOutput) EPStoLKAS_Serial.write(rcvdByte);
+			EPStoLKAS_Serial.write(rcvdByte);
 			break;
 		case 1: // second byte received on EPStoLKAS.  the 5th offset in the byte is the 'LKAS ON' signal back fom the EPS.
 		// this needs to be spoofed to '0' incase it raises an error(lkas on when the MCU says it should be)
@@ -970,18 +966,18 @@ void passEPStoLKASTorqueData(uint8_t rcvdByte){
 			uint8_t lcldata;
 			if(spoofSteeringWheelTorqueDataBool){
 				lcldata = rcvdByte ^ B00100111;// XOR  .. offset 4 needs to be 0
-				if(!DIP5_disableAllLinOutput) EPStoLKAS_Serial.write(lcldata);// XOR
+				EPStoLKAS_Serial.write(lcldata);// XOR
 				EPStoLKASBuffer[1] = lcldata;
 				spoofSteeringWheelTorqueDataBool = false;
 				
 			} else{
 				lcldata = rcvdByte ^ B00100000;// XOR  .. offset 4 needs to be 0
-				if(!DIP5_disableAllLinOutput) EPStoLKAS_Serial.write(lcldata);
+				EPStoLKAS_Serial.write(lcldata);
 				EPStoLKASBuffer[1] = lcldata;
 			}
 			break;
 		case 2: // third byte recieved ... on the third byte, the rest of the data doesnt matter as its spoofed. so send the rest now
-			if(DIP5_disableAllLinOutput) break;
+			
 			EPStoLKAS_Serial.write(B11000000);
 			EPStoLKAS_Serial.write(B10000000);
 			uint8_t lclChecksum = chksm(EPStoLKASBuffer[0],EPStoLKASBuffer[1],B11000000,B1000000);
@@ -1069,7 +1065,7 @@ void handleInputReads(){
 		// DIP2_sendOPSteeringTorque = digitalRead(DIP2);
 		DIP2_sendOPSteeringTorque = 0; // Forced into OP mode
 		// DIP5_disableAllLinOutput = digitalRead(DIP5);
-		DIP5_disableAllLinOutput = 0;
+		DIP5_disableAllLinOutput = 0; // doesn't work
 		DIP6_passSteeringWheelTorqueData = digitalRead(DIP6_passSteeringWheelTorqueData_PIN);
 		DIP7_SpoofSteeringWheelTorqueData = digitalRead(DIP7_SpoofSteeringWheelTorqueData_PIN);
 
@@ -1125,7 +1121,7 @@ void setup(){
 	pinMode(A1_applySteeringPotPin, INPUT_PULLUP);
 	pinMode(DIP1_spoofFullMCU, INPUT_PULLUP);
 	pinMode(DIP2,INPUT_PULLUP);
-	pinMode(DIP5,INPUT_PULLUP); // DIP 5 is used as a test to disable LIN output...
+	pinMode(DIP5,INPUT_PULLUP); // **disabled, removed from code** DIP 5 is used as a test to disable LIN output...
 	pinMode(DIP7_SpoofSteeringWheelTorqueData, INPUT_PULLUP);
 	pinMode(BLUE_LED,OUTPUT);
 	pinMode(LED_BUILTIN, OUTPUT);
