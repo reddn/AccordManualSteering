@@ -214,7 +214,7 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 	printArrayInBinary(&msg[0],4);
 #endif
 	CAN_message_t thisCanMsg;
-	thisCanMsg.id = 200;
+	thisCanMsg.id = 0x200;
 	thisCanMsg.len = 4;
 	thisCanMsg.buf[0] = msg[0];
 	thisCanMsg.buf[1] = msg[1];
