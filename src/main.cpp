@@ -438,7 +438,7 @@ void handleLkasFromCanV3(){
 	// so when its time to send a LKAS message, it just reads the data, make the checksum and send it
 	if(counterVerified && checksumVerified){
 		// createKLinMessageWBigSteerAndLittleSteer(lclBigSteer,lclLittleSteer);
-		OPLkasActive = true;
+		
 		OPBigSteer = lclBigSteer;
 		OPLittleSteer = lclLittleSteer;
 		
