@@ -490,8 +490,8 @@ void sendArrayToLKAStoEPSSerial(uint8_t *array){
 	LKAStoEPS_Serial.write(*(array+2));
 	LKAStoEPS_Serial.write(*(array+3));
 	
-	outputSerial.print("\nsendArrayToLKAStoEPSSerial ");
 	// if(arraySize == 5) serial.write(*(array+4));
+	//outputSerial.print("\nsendArrayToLKAStoEPSSerial ");
 	#ifdef DEBUG_PRINT_LKAStoEPS_LIN_OUTPUT
 	outputSerial.print("\nL-O:");
 	printuint_t(*array);
@@ -574,13 +574,16 @@ void handleEPStoLKAS(){
 		}
 		else handleEPStoLKASNoSpoof(rcvdByte); // do not spoof.... relay or ???
 
+
 		EPStoLKASBufferCounter++;
+				
 		if(EPStoLKASBufferCounter > 4) {
 			EPStoLKASBufferCounter = 0;
 #ifdef DEBUG_SEND_TO_SERIAL
 			// outputSerial.println("EPStoLKASBufferCounter is set to 0 by line 267");
 #endif
 		}
+
 	} // end .available()
 } // handleEPStoLKAS()
 
@@ -1035,7 +1038,12 @@ uint8_t chksm(uint8_t* data, uint8_t len){
 	return tot;
 }
 
-
+uint8_t chksm_old(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte){
+	uint16_t local = firstByte + secondByte + thirdByte ;
+	local = local % 512;
+	local = 512 - local;
+	return (uint8_t)(local % 256);
+}
 
 //code mostly taken from safety_honda.h  Credit Comma.ai MIT license on this function only
 uint8_t honda_compute_checksum(uint8_t *steerTorqueAndMotorTorque, uint8_t len) {
@@ -1096,6 +1104,10 @@ void handleInputReads(){
 		if(DIP2_sendOPSteeringTorque) digitalWrite(BLUE_LED,LOW);
 		else digitalWrite(BLUE_LED,HIGH);
 		lastDigitalReadTime = millis();
+
+		
+		digitalWrite(BLUE_LED,( EPStoLKASBuffer[2] >> 2 ) && B00000001);
+		}
 	} // end if true
 }
 
