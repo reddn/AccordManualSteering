@@ -127,6 +127,7 @@ void passEPStoLKASTorqueData(uint8_t );
 void spoofSteeringWheelTorqueData(uint8_t );
 
 void handleLkasFromCanV2(const CAN_message_t &msg);
+void handleLkasFromCanV3();
 void handleLKAStoEPSUsingOPCan();
 void handleEPStoLKASOP(uint8_t rcvdByte);
 void handleEPStoLKASKeepMcuHappy(uint8_t rcvdByte);
@@ -371,6 +372,83 @@ void handleLkasFromCanV2(){
 		// TODO: send/set/notify something to show there was an error... 
 	}
 	OPTimeLastCANRecieved = millis();
+
+}
+
+void handleLkasFromCanV3(){
+// 	BO_ 228 STEERING_CONTROL: 5 ADAS
+//  SG_ STEER_TORQUE : 7|16@0- (1,0) [-3840|3840] "" EPS
+//  SG_ STEER_TORQUE_REQUEST : 23|1@0+ (1,0) [0|1] "" EPS
+//  SG_ SET_ME_X00 : 31|8@0+ (1,0) [0|0] "" EPS
+//  SG_ COUNTER : 37|2@0+ (1,0) [0|3] "" EPS
+//  SG_ CHECKSUM : 35|4@0+ (1,0) [0|3] "" EPS
+
+	if(canMsg.id != 228) return;
+#ifdef DEBUG_PRINT_OPtoCAN_INPUT
+	outputSerial.print("\nCANmsg rcvd id: ");
+	outputSerial.print(canMsg.id,DEC);
+	outputSerial.print(":");
+	for(uint8_t bb = 0; bb < canMsg.len; bb++){
+		printuint_t(canMsg.buf[bb]);
+	}
+#endif 
+
+	if((canMsg.buf[2] >> 7) == 1 ){ // if STEER REQUEST (aka LKAS enabled)
+		OPLkasActive = true;
+	} else {
+		OPLkasActive = false;
+	}
+
+	uint8_t lclBigSteer = 0;
+	uint8_t lclLittleSteer = 0;
+	
+	lclBigSteer = ( canMsg.buf[0] >> 4 ) & B00001000;
+	lclBigSteer |= ( canMsg.buf[1] >> 4 ) & B00000111;
+	
+
+
+	lclLittleSteer = canMsg.buf[1] & B00011111 ;
+	
+		// TODO: verify counter is working
+	uint8_t lclCounter = canMsg.buf[4] >> 4;
+	bool counterVerified = false;  // need global counter   and counter error
+
+	if(LkasFromCanCounter != lclCounter) LkasFromCanCounterErrorCount++;
+	else LkasFromCanCounterErrorCount = 0;
+	
+	if(LkasFromCanCounter < 3) counterVerified = true;
+
+
+	// TODO: verify checksum
+	bool checksumVerified = false;
+
+	if(honda_compute_checksum((uint8_t*) &canMsg.buf[0],5) == (canMsg.buf[5] & B00001111 )) LkasFromCanChecksumErrorCount = 0;
+	else LkasFromCanChecksumErrorCount++;
+	
+	if(LkasFromCanCounterErrorCount < 3 ) checksumVerified = true;
+	else checksumVerified = false;
+
+
+	// TODO: Fix this, hard coded to true for testing
+	counterVerified = true;
+	checksumVerified = true;
+
+	//canbus data time is checked in the handleLkastoEPS function, if no data has been received within 50ms . LKAS is not allowed to be active
+
+	// set big/small steer in varible and that LKAS is on
+	// so when its time to send a LKAS message, it just reads the data, make the checksum and send it
+	if(counterVerified && checksumVerified){
+		// createKLinMessageWBigSteerAndLittleSteer(lclBigSteer,lclLittleSteer);
+		OPLkasActive = true;
+		OPBigSteer = lclBigSteer;
+		OPLittleSteer = lclLittleSteer;
+		
+	} else{
+		OPLkasActive = false;
+		// TODO: send/set/notify something to show there was an error... 
+	}
+	OPTimeLastCANRecieved = millis();
+
 
 }
 
@@ -1052,7 +1130,7 @@ void setup(){
 
 void loop(){
 	if(FCAN.read(canMsg)){
-		handleLkasFromCanV2();
+		handleLkasFromCanV3();
 	}
 	handleEPStoLKAS();
 	handleLKAStoEPS();
