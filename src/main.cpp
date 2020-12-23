@@ -95,6 +95,8 @@ uint8_t LkasFromCanFatalError = 0;
 
 uint8_t OPCanCounter = 0;
 
+uint16_t mainLedBlinkTimer = 2000;
+
 // 																		*****  FUNCTION DECLARATIONS  aka headers  *****
 
 void printuint_t(uint8_t );
@@ -986,7 +988,7 @@ void handleInputReads(){
 		DIP5_disableAllLinOutput = 0;
 		DIP6_passSteeringWheelTorqueData = digitalRead(DIP6_passSteeringWheelTorqueData_PIN);
 		DIP7_SpoofSteeringWheelTorqueData = digitalRead(DIP7_SpoofSteeringWheelTorqueData_PIN);
-		
+
 		//commented out as this is not needed now. but can be easily re enabled for manual control fun
 		// A1_applySteeringPot = analogRead(A1_applySteeringPotPin);
 		
@@ -1001,6 +1003,8 @@ void handleInputReads(){
 			spoofSteeringWheelTorqueData_Counter = 0;
 		}
 
+		if( (millis() - OPTimeLastCANRecieved) < 1000 ) mainLedBlinkTimer = 500;
+		else mainLedBlinkTimer = 2000; 
 		// digitalWrite(BLUE_LED,!DIP2_sendOPSteeringTorque);
 		if(DIP2_sendOPSteeringTorque) digitalWrite(BLUE_LED,LOW);
 		else digitalWrite(BLUE_LED,HIGH);
@@ -1053,7 +1057,7 @@ void loop(){
 	handleEPStoLKAS();
 	handleLKAStoEPS();
 	handleInputReads();
-	if((millis() - readLEDblinkLastChange) > 2000){
+	if((millis() - readLEDblinkLastChange) > mainLedBlinkTimer){
 		// outputSerial.println("LED change");
 		digitalWrite(LED_BUILTIN,!digitalRead(LED_BUILTIN));
 		// digitalWrite(BLUE_LED,!digitalRead(BLUE_LED));
