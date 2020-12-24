@@ -197,7 +197,7 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 	uint8_t msg[4];
 	msg[0] = (incomingMsg.counterBit << 5) |  bigSteer;
 	
-	if(littleSteer != 0 && bigSteer != 0){
+	if(littleSteer > 0 || bigSteer > 0){
 		littleSteer = littleSteer & B00011110;
 		littleSteer = littleSteer | ( (lastLittleSteer1bit ^ 1 ) & B00000001);
 	}
