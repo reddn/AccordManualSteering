@@ -197,7 +197,8 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 	uint8_t msg[4];
 	msg[0] = (incomingMsg.counterBit << 5) |  bigSteer;
 	
-	littleSteer = littleSteer ^ lastLittleSteer1bit;
+	littleSteer = littleSteer & B00011110;
+	littleSteer = littleSteer | ( (lastLittleSteer1bit ^ 1 ) & B00000001);
 
 	//get the little steer in the 2nd byte. its the last 5 bits of applysteer. also add in the 0xA0 = 1010 0000
 	msg[1] = littleSteer | 0xA0;  // 1010 0000
@@ -207,10 +208,11 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 	msg[3] = chksm(msg[0], msg[1], msg[2]);
 
 
-		LKAStoEPS_Serial.write(msg[0]);
-		LKAStoEPS_Serial.write(msg[1]);
-		LKAStoEPS_Serial.write(msg[2]);
-		LKAStoEPS_Serial.write(msg[3]);
+	LKAStoEPS_Serial.write(msg[0]);
+	LKAStoEPS_Serial.write(msg[1]);
+	LKAStoEPS_Serial.write(msg[2]);
+	LKAStoEPS_Serial.write(msg[3]);
+
 	lastLittleSteer1bit = littleSteer & B00000001;
 
 #ifdef DEBUG_PRINT_LKAStoEPS_LIN_OUTPUT
