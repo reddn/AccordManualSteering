@@ -197,8 +197,10 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 	uint8_t msg[4];
 	msg[0] = (incomingMsg.counterBit << 5) |  bigSteer;
 	
-	littleSteer = littleSteer & B00011110;
-	littleSteer = littleSteer | ( (lastLittleSteer1bit ^ 1 ) & B00000001);
+	if(littleSteer != 0){
+		littleSteer = littleSteer & B00011110;
+		littleSteer = littleSteer | ( (lastLittleSteer1bit ^ 1 ) & B00000001);
+	}
 
 	//get the little steer in the 2nd byte. its the last 5 bits of applysteer. also add in the 0xA0 = 1010 0000
 	msg[1] = littleSteer | 0xA0;  // 1010 0000
@@ -221,11 +223,14 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 #endif
 	CAN_message_t thisCanMsg;
 	thisCanMsg.id = 0x200;
-	thisCanMsg.len = 4;
+	thisCanMsg.len = 6;
 	thisCanMsg.buf[0] = msg[0];
 	thisCanMsg.buf[1] = msg[1];
 	thisCanMsg.buf[2] = msg[2];
 	thisCanMsg.buf[3] = msg[3];
+	thisCanMsg.buf[4] = littleSteer;
+	thisCanMsg.buf[4] |=  bigSteer << 5;
+	thisCanMsg.buf[5] = bigSteer >> 3;
 	FCAN.write(thisCanMsg);
 }
 
