@@ -97,6 +97,8 @@ uint8_t OPCanCounter = 0;
 
 uint16_t mainLedBlinkTimer = 2000;
 
+uint8_t lastLittleSteer1bit= 0;
+
 // 																		*****  FUNCTION DECLARATIONS  aka headers  *****
 
 void printuint_t(uint8_t );
@@ -195,7 +197,8 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 	uint8_t msg[4];
 	msg[0] = (incomingMsg.counterBit << 5) |  bigSteer;
 	
-	
+	littleSteer = littleSteer ^ lastLittleSteer1bit;
+
 	//get the little steer in the 2nd byte. its the last 5 bits of applysteer. also add in the 0xA0 = 1010 0000
 	msg[1] = littleSteer | 0xA0;  // 1010 0000
 	//								   ^ lkas on
@@ -208,6 +211,7 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 		LKAStoEPS_Serial.write(msg[1]);
 		LKAStoEPS_Serial.write(msg[2]);
 		LKAStoEPS_Serial.write(msg[3]);
+	lastLittleSteer1bit = littleSteer & B00000001;
 
 #ifdef DEBUG_PRINT_LKAStoEPS_LIN_OUTPUT
 	outputSerial.print("\nL-O:");
