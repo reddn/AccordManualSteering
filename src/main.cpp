@@ -197,6 +197,7 @@ void createKLinMessageWBigSteerAndLittleSteer(uint8_t bigSteer, uint8_t littleSt
 	uint8_t msg[4];
 	msg[0] = (incomingMsg.counterBit << 5) |  bigSteer;
 	
+	
 	if(littleSteer > 0 || bigSteer > 0){
 		littleSteer = littleSteer & B00011110;
 		littleSteer = littleSteer | ( (lastLittleSteer1bit ^ 1 ) & B00000001);
@@ -920,7 +921,7 @@ void buildSteerStatusCanMsg(){ //TODO: add to decclaration
 	msg.len = 3;
 	msg.buf[0] = EPStoLKASBuffer[0] << 5;   // 3 LSB of BigSteerTorque (4bit)
 	msg.buf[0] |= EPStoLKASBuffer[1] & B00011111; // all of smallSteerTorque
-	msg.buf[1] = ( EPStoLKASBuffer[0] >>3 ) & B00000001; // 1st MSB of bigSteerTorque (4bit)
+	msg.buf[1] =  ( ~(  EPStoLKASBuffer[0] >>3 ) )   & B00000001; // 1st MSB of bigSteerTorque (4bit) ... added NOT (~) to invert the sign
 
 	msg.buf[2] = (OPCanCounter << 4 ); // put in the counter
 
