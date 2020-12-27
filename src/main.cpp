@@ -16,7 +16,11 @@
 // #define DEBUG_PRINT_OPtoCAN_INPUT 1
 
 
-// *****  Global Variables *****
+
+/***********************************************************************************************************************************************************
+ * 						 Global  Variables
+ * ********************************************************************************************************************************************************/
+
 
 incomingLKASMessage incomingMsg;
 
@@ -77,8 +81,6 @@ int A1_applySteeringPot = 0;
 
 bool spoofSteeringWheelTorqueDataBool = false;
 
-uint8_t spoofSteeringWheelTorqueData_Counter = 0;
-
 bool OPLkasActive = false;
 uint8_t OPBigSteer = 0;
 uint8_t OPLittleSteer = 0;
@@ -99,48 +101,67 @@ uint16_t mainLedBlinkTimer = 2000;
 
 uint8_t lastLittleSteer1bit= 0;
 
-// 																		*****  FUNCTION DECLARATIONS  aka headers  *****
+unsigned short timeLastModifiedSteerTorqueData = 0;
+uint8_t valueAddedToSteerTorque = 0;
 
+
+
+/***********************************************************************************************************************************************************
+ * 						FUNCTION DELCARIATIONS     aka headers 
+ * ********************************************************************************************************************************************************/
+
+void handleInputReads();
+
+//print data (byte) in binary form to outputSerial Functions
 void printuint_t(uint8_t );
 void printArrayInBinary(uint8_t*, uint8_t);
 
-void createKLinMessage(int16_t );
-uint8_t chksm(uint8_t , uint8_t , uint8_t );
-uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte, uint8_t fourthByte);
-void  deconstructLKASMessage(uint8_t );
-void handleEPStoLKAS();
-void handleInputReads();
-void sendArrayToSerial(HardwareSerial ,uint8_t* ,uint8_t);
-
-void handleLKAStoMCUSpoofMCU(uint8_t);
-void handleEPStoLKASSpoofMCU(uint8_t);
-void handleLKAStoEPSNoSpoof(uint8_t);
-void handleEPStoLKASNoSpoof(uint8_t);
-
-void sendEPStoLKASToCAN(uint8_t*);
-void sendLKAStoEPSFromCAN(uint8_t*);// might not use this one
-void handleLKASFromCan();
-void createKLinMessageWBigSteerAndLittleSteer(uint8_t,uint8_t);
-
+//send data to serial
 void sendArrayToEPStoLKASSerial(uint8_t*);
 void sendArrayToLKAStoEPSSerial(uint8_t*);
 
-void passEPStoLKASTorqueData(uint8_t );
-void spoofSteeringWheelTorqueData(uint8_t );
-
+// LKAS to EPS functions
+void handleLKAStoMCUSpoofMCU(uint8_t);
+void handleLKAStoEPSUsingOPCan();
+void handleLKAStoEPSNoSpoof(uint8_t);
 void handleLkasFromCanV2(const CAN_message_t &msg);
 void handleLkasFromCanV3();
-void handleLKAStoEPSUsingOPCan();
+
+void sendLKAStoEPSFromCAN(uint8_t*);// might not use this one
+
+// EPS to LKAS functions
+void  deconstructLKASMessage(uint8_t ); //takes the EPStoLKAS frame and extracts the data and puts it into 'incomingMsg'
+void handleEPStoLKAS();
+void handleEPStoLKASNoSpoof(uint8_t);
+void handleEPStoLKASSpoofMCU(uint8_t);
+void sendEPStoLKASToCAN(uint8_t*);
 void handleEPStoLKASOP(uint8_t rcvdByte);
 void handleEPStoLKASKeepMcuHappy(uint8_t rcvdByte);
+void passEPStoLKASTorqueData(uint8_t );
+void spoofSteeringWheelTorqueData(uint8_t );
+void handleEPStoLKASModifyTorqueData(uint8_t rcvdByte);
 
+void handleLKASFromCan();
+
+//create LIN messages
+void createKLinMessage(int16_t );
+void createKLinMessageWBigSteerAndLittleSteer(uint8_t,uint8_t);
+
+//build and send CAN messages
 void buildSteerMotorTorqueCanMsg();
 void buildSteerStatusCanMsg();
 
+//checksums
 uint8_t honda_compute_checksum(uint8_t *steerTorqueAndMotorTorque, uint8_t size); // << From Comma.ai Panda safety_honda.h licensed unde MIT
+uint8_t chksm(uint8_t , uint8_t , uint8_t );
+uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte, uint8_t fourthByte);
 
 
-// 	*	*	*	*	*	*	*	*	******	FUNCTIONS ***** 
+
+ 
+/***********************************************************************************************************************************************************
+ * 						 Functions
+ * ********************************************************************************************************************************************************/
 
 
 //This function takes the signed int to make it into a valid LKAStoEPS message for steering.  
@@ -278,7 +299,11 @@ void  deconstructLKASMessage(uint8_t msg){ //
 
 
 
-// *	*	*	*	*	*	*	*	*	********** Handle  LKAS  to  EPS
+
+/***********************************************************************************************************************************************************
+ * 						 Handle  LKAS  to  EPS
+ **********************************************************************************************************************************************************/
+
 
 //main loop function to check if any data was received on the stock LKAStoEPS line, then handle it spending on spoof settings 
 void handleLKAStoEPS(){
@@ -288,7 +313,7 @@ void handleLKAStoEPS(){
 
 		if(!DIP2_sendOPSteeringTorque) handleLKAStoEPSUsingOPCan();// DIP 2 On
 		else if(!DIP1_spoofFullMCUDigitalRead) handleLKAStoMCUSpoofMCU(rcvdByte); //DIP1 On  -  spoof MCU
-		else if(DIP1_spoofFullMCUDigitalRead) handleLKAStoEPSNoSpoof(rcvdByte); //DIP1 Off -  do not spoof MCU.. relay or modify
+		else handleLKAStoEPSNoSpoof(rcvdByte); //DIP1 Off -  do not spoof MCU.. relay or modify
 #ifdef DEBUG_PRINT_LKAStoEPS_LIN_INPUT
 		outputSerial.print("\nL-I:");
 		outputSerial.print(incomingMsg.totalCounter,DEC);
@@ -298,6 +323,7 @@ void handleLKAStoEPS(){
 	} 
 
 } // handleLKAStoEPS()
+
 
 //if we are only forwarding the LKAStoEPS line, this is called.. ie, no spoofing.
 //sends the data to the CAN bus if sendLKAStoEPSRxToCan is true, thsi is for OP to capture for later review
@@ -310,6 +336,7 @@ void handleLKAStoEPSNoSpoof(uint8_t rcvdByte){
 	printuint_t(rcvdByte);
 	outputSerial.write(' ');	
 #endif
+
 	if(incomingMsg.totalCounter == 3){
 		if(sendLKAStoEPSRxToCan){
 			canMsg.id = LKAStoEPSLinDataRxMsgId;
@@ -324,7 +351,7 @@ void handleLKAStoEPSNoSpoof(uint8_t rcvdByte){
 }
 
 
-void handleLkasFromCanV2(){
+void handleLkasFromCanV2(){  /// not used because it needed the original dbc version... due to size as listed in the 
 	// BO_ 228 STEERING_CONTROL: 3 EON
 //  SG_ STEER_TORQUE_REQUEST : 9|1@0+ (1,0) [0|1] "" EPS
 //  SG_ STEER_TORQUE : 0|9@0- (1,0) [-256|255] "" EPS
@@ -527,7 +554,10 @@ void sendArrayToLKAStoEPSSerial(uint8_t *array){
 
 
 
-// *	*	*	*	*	*	*	*	*	******* EPS  to   LKAS
+/***********************************************************************************************************************************************************
+ * 						 EPS  to  LKAS functions
+ * ********************************************************************************************************************************************************/
+
 
 void handleEPStoLKAS(){
 	if(EPStoLKAS_Serial.available())
@@ -539,6 +569,7 @@ void handleEPStoLKAS(){
 		{
 			if(EPStoLKASBufferCounter != 0)
 			{
+
 #ifdef DEBUG_PRINT_EPStoLKAS_ERRORS
 			outputSerial.print("\nEPStoLKAS Was reset out of sequence   -  ");
 			for(uint8_t z = 0; z < EPStoLKASBufferCounter; z++)
@@ -550,15 +581,11 @@ void handleEPStoLKAS(){
 				outputSerial.print("  -  ");
 				outputSerial.println(EPStoLKASBufferCounter,DEC);
 #endif
+
 			}
 
 			EPStoLKASBufferCounter = 0;
 		}
-#ifdef DEBUG_SEND_TO_SERIAL
-	// outputSerial.print("  -  ");
-	// outputSerial.print(EPStoLKASBufferCounter,DEC);
-	// Serial.print("")
-#endif
 
 #ifdef DEBUG_PRINT_EPStoLKAS_LIN_INPUT
 	outputSerial.print("\nE-I-");
@@ -569,23 +596,21 @@ void handleEPStoLKAS(){
 
 #endif 
 	// if its the 5th byte (index 4).. check checksum,, if its bad.. return
-		if(EPStoLKASBufferCounter == 4){
+		if(EPStoLKASBufferCounter == 4)
+		{
 			uint8_t thisChksm = chksm(&EPStoLKASBuffer[0],4);
 			if(thisChksm != rcvdByte){
+
 #ifdef DEBUG_PRINT_EPStoLKAS_ERRORS
 			outputSerial.print(" Bad Chksm ");
 			printuint_t(thisChksm);
 			outputSerial.print("  **  ");
 			printuint_t(rcvdByte);
 #endif 	
-			EPStoLKASBufferCounter = 0;
-			return;
+
+			}
 		}
-	}
-
-
 		EPStoLKASBuffer[EPStoLKASBufferCounter] = rcvdByte;
-
 
 		if(!DIP2_sendOPSteeringTorque) {
 			handleEPStoLKASOP(rcvdByte);
@@ -594,19 +619,18 @@ void handleEPStoLKAS(){
 		else if(!DIP1_spoofFullMCUDigitalRead) {
 			handleEPStoLKASSpoofMCU(rcvdByte);  //spoof MCU
 		}
+		else if(!DIP7_SpoofSteeringWheelTorqueData){
+			handleEPStoLKASModifyTorqueData(rcvdByte);
+		}
 		else handleEPStoLKASNoSpoof(rcvdByte); // do not spoof.... relay or ???
-
 
 		EPStoLKASBufferCounter++;
 				
 		if(EPStoLKASBufferCounter > 4) {
 			EPStoLKASBufferCounter = 0;
-#ifdef DEBUG_SEND_TO_SERIAL
-			// outputSerial.println("EPStoLKASBufferCounter is set to 0 by line 267");
-#endif
 		}
 
-	} // end .available()
+	} // end EPStoLKAS_Serial.available()
 } // handleEPStoLKAS()
 
 
@@ -627,7 +651,7 @@ void handleEPStoLKASOP(uint8_t rcvdByte){
 }
 
 void handleEPStoLKASKeepMcuHappy(uint8_t rcvdByte){
-	// if(EPStoLKASBufferCounter == 0) EPStoLKAS_Serial.write(rcvdByte);
+
 	if(EPStoLKASBufferCounter == 0){
 		
 			sendArrayToEPStoLKASSerial(&eps_off_array[incomingMsg.counterBit][0]);
@@ -664,6 +688,33 @@ void handleEPStoLKASNoSpoof(uint8_t rcvdByte){
 	}
 }
 
+//Used when DIP7 is ON  
+void handleEPStoLKASModifyTorqueData(uint8_t rcvdByte){
+	switch(EPStoLKASBufferCounter){
+		case 0:
+			EPStoLKAS_Serial.write(rcvdByte);
+			break;
+		case 1:
+			if(valueAddedToSteerTorque == 0 ) EPStoLKAS_Serial.write(rcvdByte);
+			else{
+				EPStoLKAS_Serial.write(rcvdByte + valueAddedToSteerTorque);
+				EPStoLKASBuffer[EPStoLKASBufferCounter] += valueAddedToSteerTorque;
+			}
+			break;
+		case 2:
+			EPStoLKAS_Serial.write(rcvdByte);
+			break;
+		case 3:
+			EPStoLKAS_Serial.write(rcvdByte);
+			break;
+		case 4:
+			if(valueAddedToSteerTorque == 0) EPStoLKAS_Serial.write(rcvdByte);
+			else EPStoLKAS_Serial.write( chksm(&EPStoLKASBuffer[0],4) );
+			valueAddedToSteerTorque = 0;
+	} // end switch()
+} // end handleEPStoLKASModifyTorqueData();
+
+
 
 //the name says it all. requites 5 byte array pointer
 void sendArrayToEPStoLKASSerial(uint8_t *array){
@@ -673,7 +724,6 @@ void sendArrayToEPStoLKASSerial(uint8_t *array){
 	EPStoLKAS_Serial.write(*(array+2));
 	EPStoLKAS_Serial.write(*(array+3));
 	EPStoLKAS_Serial.write(*(array+4));
-	// if(arraySize == 5) serial.write(*(array+4));
 }
 
 
@@ -739,7 +789,10 @@ void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
 
 
 
-// *	*	*	*	*	*	*	*	*	*	*	*	*********  Printing   Functions
+/***********************************************************************************************************************************************************
+ * 						 Printing  functions
+ * ********************************************************************************************************************************************************/
+
 
 //prints the binary representation of a uint8_t (byte/char).  it also adds a space at between the two 4 bit segments, easier to read
 //the naming is pretty bad, but need to change it. 
@@ -775,14 +828,8 @@ void printEPSArray(uint8_t *msg){ //msg is array[0]
 	}
 }
 
-//sends an array to a specified serial... i think this doenst work this way and will crash a program if used.. probably a good idea to remove it TODO
-void sendArrayToSerial(HardwareSerial serial,uint8_t *array,uint8_t arraySize){
-	serial.write(*array);
-	serial.write(*(array+1));
-	serial.write(*(array+2));
-	serial.write(*(array+3));
-	if(arraySize == 5) serial.write(*(array+4));
-}
+
+
 
 
 
@@ -810,7 +857,6 @@ void handleLKAStoMCUSpoofMCU(uint8_t rcvdByte){
 		} else if(!PB4_spoofLKASSteerWithPOTEnableDigitalRead){
 			createKLinMessage(forceApplyTorqueWithPOT);
 		} else {
-			// sendArrayToSerial(LKAStoEPS_Serial,&lkas_off_array[incomingMsg.counterBit][0], 4); 
 			sendArrayToLKAStoEPSSerial(&lkas_off_array[incomingMsg.counterBit][0]);
 #ifdef DEBUG_PRINT_LKAStoEPS_ERROR
 			outputSerial.print("\nL-");
@@ -871,7 +917,10 @@ void sendEPStoLKASToCAN(uint8_t *EPSData){ // Sends the 5 byte frame to CAN for 
 
 
 
-//*	*	*	*	*	*	*	*	*	*	*	*	***					OP functions			***
+/***********************************************************************************************************************************************************
+ * 						 OP  functions
+ * ********************************************************************************************************************************************************/
+
 
 // BO_ 427 STEER_MOTOR_TORQUE: 3 EPS
 //  SG_ MOTOR_TORQUE : 0|10@0+ (1,0) [-256|256] "" EON
@@ -1026,7 +1075,10 @@ void spoofSteeringWheelTorqueData(uint8_t rcvdByte){
 
 
 
-// *	*	*	*	*	*	*	*	*	***					CHECKSUM FUNCTIONS
+/***********************************************************************************************************************************************************
+ * 						 checksum Functions
+ * ********************************************************************************************************************************************************/
+
 
 // creates the checksum for the LKAStoEPS message (its 3 bytes + 1 checksum for the frame)
 uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte){
@@ -1092,13 +1144,10 @@ void handleInputReads(){
 		PB1_spoofLKASLeftDigitalRead = digitalRead(PB1_spoofLKASLeft);
 		PB2_spoofLKASRightDigitalRead = digitalRead(PB2_spoofLKASRight);
 		PB4_spoofLKASSteerWithPOTEnableDigitalRead = digitalRead(PB4_spoofLKASSteerWithPOTEnablePin);
-		// if((!PB1_spoofLKASLeftDigitalRead) || (!PB2_spoofLKASRightDigitalRead)){
-		// 	digitalWrite(BLUE_LED,HIGH);
-		// } else digitalWrite(BLUE_LED,LOW);
 
 		DIP1_spoofFullMCUDigitalRead = digitalRead(DIP1_spoofFullMCU);
-		// DIP2_sendOPSteeringTorque = digitalRead(DIP2);
 		DIP2_sendOPSteeringTorque = 0; // Forced into OP mode
+
 		// DIP5_disableAllLinOutput = digitalRead(DIP5);
 		DIP5_disableAllLinOutput = 0; // doesn't work
 		DIP6_passSteeringWheelTorqueData = digitalRead(DIP6_passSteeringWheelTorqueData_PIN);
@@ -1106,17 +1155,7 @@ void handleInputReads(){
 
 		//commented out as this is not needed now. but can be easily re enabled for manual control fun
 		// A1_applySteeringPot = analogRead(A1_applySteeringPotPin);
-		
-		forceApplyTorqueWithPOT = (A1_applySteeringPot - 474) / 1.78;
-
-		
-		// outputSerial.print(A1_applySteeringPot,DEC);
-		// outputSerial.print("  -  ");
-		// outputSerial.println(forceApplyTorqueWithPOT,DEC);
-		if(spoofSteeringWheelTorqueData_Counter++ > 400){
-			spoofSteeringWheelTorqueDataBool = true;
-			spoofSteeringWheelTorqueData_Counter = 0;
-		}
+		// forceApplyTorqueWithPOT = (A1_applySteeringPot - 474) / 1.78;
 
 		if( (millis() - OPTimeLastCANRecieved) < 1000 ) mainLedBlinkTimer = 500;
 		else mainLedBlinkTimer = 2000; 
@@ -1126,11 +1165,21 @@ void handleInputReads(){
 
 		
 		digitalWrite(BLUE_LED,( EPStoLKASBuffer[2] >> 2 ) & B00000001);
+		if(DIP7_SpoofSteeringWheelTorqueData){
+			if( (millis() - timeLastModifiedSteerTorqueData ) > 3000){
+				valueAddedToSteerTorque = 10;
+			}
+		}
 		
 	} // end if true
 }
 
-// 			****** 				SETUP 					******
+
+
+/***********************************************************************************************************************************************************
+ * 						 Setup  and  Loop
+ * ********************************************************************************************************************************************************/
+
 
 // helper setup to setup the CAN bus.  
 // void canSetup(){
@@ -1139,7 +1188,7 @@ void handleInputReads(){
 // 	FCAN.setMaxMB(16);
 // 	FCAN.enableFIFO();
 // 	FCAN.enableFIFOInterrupt();
-// 	FCAN.onReceive(handleLKASFromCanV2);
+// 	// FCAN.onReceive(handleLKASFromCanV2);
 // 	FCAN.mailboxStatus();
 
 // 	FCAN.setFIFOFilter(REJECT_ALL);
@@ -1160,7 +1209,7 @@ void setup(){
 	pinMode(DIP1_spoofFullMCU, INPUT_PULLUP);
 	pinMode(DIP2,INPUT_PULLUP);
 	pinMode(DIP5,INPUT_PULLUP); // **disabled, removed from code** DIP 5 is used as a test to disable LIN output...
-	pinMode(DIP7_SpoofSteeringWheelTorqueData, INPUT_PULLUP);
+	pinMode(DIP7_SpoofSteeringWheelTorqueData_PIN, INPUT_PULLUP);
 	pinMode(BLUE_LED,OUTPUT);
 	pinMode(LED_BUILTIN, OUTPUT);
 	// canSetup();
@@ -1176,9 +1225,7 @@ void loop(){
 	handleLKAStoEPS();
 	handleInputReads();
 	if((millis() - readLEDblinkLastChange) > mainLedBlinkTimer){
-		// outputSerial.println("LED change");
 		digitalWrite(LED_BUILTIN,!digitalRead(LED_BUILTIN));
-		// digitalWrite(BLUE_LED,!digitalRead(BLUE_LED));
 		readLEDblinkLastChange = millis();
 	} 
 }
