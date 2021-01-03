@@ -152,7 +152,8 @@ void buildSteerMotorTorqueCanMsg();
 void buildSteerStatusCanMsg();
 
 //checksums
-uint8_t honda_compute_checksum(uint8_t *steerTorqueAndMotorTorque, uint8_t size); // << From Comma.ai Panda safety_honda.h licensed unde MIT
+uint8_t honda_compute_checksum(uint8_t *steerTorqueAndMotorTorque, uint8_t size, uint8_t addr); // << From Comma.ai Panda safety_honda.h licensed unde MIT
+uint8_t honda_compute_checksum_CAN(CAN_message_t*);
 uint8_t chksm(uint8_t , uint8_t , uint8_t );
 uint8_t chksm(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte, uint8_t fourthByte);
 
@@ -397,7 +398,7 @@ void handleLkasFromCanV2(){  /// not used because it needed the original dbc ver
 	// TODO: verify checksum
 	bool checksumVerified = false;
 
-	if(honda_compute_checksum((uint8_t*) &canMsg.buf[0],3) == (canMsg.buf[3] & B00001111 )) LkasFromCanChecksumErrorCount = 0;
+	if(honda_compute_checksum((uint8_t*) &canMsg.buf[0],3,228) == (canMsg.buf[3] & B00001111 )) LkasFromCanChecksumErrorCount = 0;
 	else LkasFromCanChecksumErrorCount++;
 	
 	if(LkasFromCanCounterErrorCount < 3 ) checksumVerified = true;
@@ -468,7 +469,7 @@ void handleLkasFromCanV3(){
 	// TODO: verify checksum
 	bool checksumVerified = false;
 
-	if(honda_compute_checksum((uint8_t*) &canMsg.buf[0],5) == (canMsg.buf[5] & B00001111 )) LkasFromCanChecksumErrorCount = 0;
+	if(honda_compute_checksum((uint8_t*) &canMsg.buf[0],5, 228) == (canMsg.buf[5] & B00001111 )) LkasFromCanChecksumErrorCount = 0;
 	else LkasFromCanChecksumErrorCount++;
 	
 	if(LkasFromCanCounterErrorCount < 3 ) checksumVerified = true;
@@ -780,7 +781,7 @@ void handleEPStoLKASSpoofMCU(uint8_t rcvdByte){
 		steerTorqueAndMotorTorque[2] |= ( EPStoLKASBuffer[3] & B00000111);
 
 		steerTorqueAndMotorTorque[3] = EPStoLKASCanFrameCounter << 4;
-		steerTorqueAndMotorTorque[3] |= honda_compute_checksum(&steerTorqueAndMotorTorque[0], 4);
+		steerTorqueAndMotorTorque[3] |= honda_compute_checksum(&steerTorqueAndMotorTorque[0], 4, canMsg.id);
 		
 		if(++EPStoLKASCanFrameCounter >3) EPStoLKASCanFrameCounter = 0;
 	}
@@ -946,7 +947,7 @@ void buildSteerMotorTorqueCanMsg(){ //TODO: add to decclaration
 	msg.buf[1] |=  EPStoLKASBuffer[2] & B01000000; //output_disabled
 	
 	msg.buf[2] = (OPCanCounter << 4 ); // put in the counter
-	msg.buf[2] |= honda_compute_checksum(&msg.buf[0],3);
+	msg.buf[2] |= honda_compute_checksum(&msg.buf[0],3,msg.id);
 	FCAN.write(msg);
 }
 
@@ -973,13 +974,13 @@ void buildSteerStatusCanMsg(){ //TODO: add to decclaration
 	msg.buf[0] = ~msg.buf[0]; // invert the whole message to make negative positive, positive negative.  OP wants left positive (why??)
 	msg.buf[1] =  ( ~(  EPStoLKASBuffer[0] >>3 ) )   & B00000001; // 1st MSB of bigSteerTorque (4bit) ... added NOT (~) to invert the sign
 
-	msg.buf[2] = (OPCanCounter << 4 ); // put in the counter
 
 	//add other data from Teensy so OP can record it
 	msg.buf[1] |= OPLkasActive << 7;
 	msg.buf[1] |= LkasFromCanFatalError << 6;
 	
-	msg.buf[2] |= honda_compute_checksum(&msg.buf[0],3);
+	msg.buf[2] = (OPCanCounter << 4 ); // put in the counter
+	msg.buf[2] |= honda_compute_checksum(&msg.buf[0],3,msg.id);
 	FCAN.write(msg);
 }
 
@@ -1119,10 +1120,10 @@ uint8_t chksm_old(uint8_t firstByte, uint8_t secondByte, uint8_t thirdByte){
 }
 
 //code mostly taken from safety_honda.h  Credit Comma.ai MIT license on this function only
-uint8_t honda_compute_checksum(uint8_t *steerTorqueAndMotorTorque, uint8_t len) {
+uint8_t honda_compute_checksum(uint8_t *steerTorqueAndMotorTorque, uint8_t len, uint8_t addr) {
 //   int len = GET_LEN(to_push);
   uint8_t checksum = 0U;
-  unsigned int addr = 399U; //this should be set up top... 399 is STEER STATUS
+//   unsigned int addr =  399U; //this should be set up top... 399 is STEER STATUS
   while (addr > 0U) {
     checksum += (addr & 0xFU); addr >>= 4;
   }
@@ -1135,6 +1136,10 @@ uint8_t honda_compute_checksum(uint8_t *steerTorqueAndMotorTorque, uint8_t len) 
   }
   return (8U - checksum) & 0xFU;
 }
+
+// uint8_t honda_compute_checksum_CAN(CAN_message_t *themsg){
+// 	return honda_compute_checksum(themsg->buf[0],(*themsg).len, (uint8_t) (*themsg).id);
+// }
 
 //called from the main loop.  reads only when needed by the TIME_BETWEEN_DIGIAL_READS define, in milliseconds
 //this helps from too many digitalRead calls slowing down reading from the other buses.
