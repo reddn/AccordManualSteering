@@ -1,5 +1,5 @@
 # AccordManualSteering
-using m.locketa's awesome board.
+using m.locoteta's awesome board.
 
 
 MIT License
